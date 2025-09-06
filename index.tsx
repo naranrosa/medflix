@@ -137,20 +137,18 @@ const Breadcrumbs = ({ paths }) => (
 );
 
 
-// --- TELA DE AUTENTICAÇÃO (ATUALIZADA) ---
+// --- TELA DE AUTENTICAÇÃO (ATUALIZADA com Placeholders) ---
 const AuthScreen = ({ theme, toggleTheme }) => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-
   const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
-      // Agora só faz login
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
     } catch (err) {
@@ -169,12 +167,29 @@ const AuthScreen = ({ theme, toggleTheme }) => {
         <form onSubmit={handleAuth}>
           <div className="form-group">
             <label htmlFor="email">Email</label>
-            <input id="email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="Digite seu email"  />
+            <input
+              id="email"
+              className="input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="Digite seu email"
+            />
           </div>
           <div className="form-group">
             <label htmlFor="password">Senha</label>
-            <input id="password" className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Digite sua senha"  />
+            <input
+              id="password"
+              className="input"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="Digite sua senha"
+            />
           </div>
+
           {error && <p style={{color: 'var(--danger-accent)', marginTop: '1rem'}}>{error}</p>}
           <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? 'Carregando...' : 'Entrar'}
