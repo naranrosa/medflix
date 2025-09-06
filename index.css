@@ -1393,3 +1393,55 @@ body.light-mode .login-card .select-input:focus {
     padding: 0.6rem 1rem;
   }
 }
+
+/* ==========================================================================
+   CORREÇÃO DO LAYOUT DE ROLAGEM HORIZONTAL E VERTICAL DO RESUMO
+   ========================================================================== */
+
+/*
+  1. Esta é a regra principal. Adicionamos 'overflow-x: auto'
+  para que uma barra de rolagem horizontal apareça SOMENTE se o
+  conteúdo for mais largo que a área.
+*/
+.tab-content {
+  flex-grow: 1;
+  overflow-y: auto;  /* Rolagem vertical (você já tem isso) */
+  overflow-x: auto;  /* Rolagem horizontal (ADICIONE ISTO) */
+  padding: 1.5rem;
+}
+
+/*
+  2. Regras de segurança para o conteúdo DENTRO do resumo.
+  Isso ajuda a prevenir o overflow antes mesmo que ele aconteça.
+*/
+.summary-content {
+  /* Garante que o conteúdo respeite a largura máxima antes de forçar a rolagem */
+  max-width: 100%;
+  
+  /* Força a quebra de palavras/URLs muito longas para que não estourem o layout */
+  overflow-wrap: break-word;
+  word-wrap: break-word; /* Suporte para navegadores mais antigos */
+  word-break: break-word;
+}
+
+/*
+  3. Garante que imagens nunca sejam maiores que seu contêiner.
+  Essencial para a responsividade.
+*/
+.summary-content img {
+  max-width: 100%;
+  height: auto; /* Mantém a proporção da imagem */
+  display: block;
+}
+
+/*
+  4. Garante que blocos de código (`<pre>`) sejam roláveis
+  internamente se tiverem linhas muito compridas.
+*/
+.summary-content pre {
+  overflow-x: auto;
+  background-color: var(--card-bg); /* Um fundo para destacar */
+  padding: 1rem;
+  border-radius: 8px;
+  white-space: pre; /* Mantém a formatação do código */
+}
