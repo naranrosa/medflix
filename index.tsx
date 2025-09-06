@@ -243,7 +243,7 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
                 tools: [{ functionDeclarations: [ { name: 'enhancedContentSchema', description: '', parameters: enhancedContentSchema }] }]
             });
             // @ts-ignore
-            const parsedJson = JSON.parse(response.candidates[0].content.parts[0].functionCall.args);
+            const parsedJson = JSON.parse(response.text());            
             setLoadingMessage('Resumo atualizado com sucesso!');
             await new Promise(res => setTimeout(res, 1000));
             onUpdate(parsedJson.enhancedContent);
@@ -307,13 +307,13 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
 
             const response = await ai.models.generateContent({
                 model: model,
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                generationConfig: { responseMimeType: "application/json" },
-                // @ts-ignore
-                tools: [{ functionDeclarations: [ { name: 'enhancedContentSchema', description: '', parameters: enhancedContentSchema }] }]
+                contents: prompt,
+                generationConfig: { responseMimeType: "application/json", responseSchema: enhancedContentSchema },
             });
-            // @ts-ignore
-            const parsedJson = JSON.parse(response.candidates[0].content.parts[0].functionCall.args);
+
+            // --- A CORREÇÃO ESTÁ AQUI ---
+            // Substituímos a linha complexa e frágil por esta, que é mais robusta.
+            const parsedJson = JSON.parse(response.text());
 
             setLoadingMessage('Conteúdo aprimorado com sucesso!');
             await new Promise(res => setTimeout(res, 1000));
@@ -1187,7 +1187,7 @@ const App = () => {
     try {
         const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere um quiz. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
         const response = await ai.models.generateContent({ /* ... */ }); // Adapte para a nova sintaxe se necessário
-        const parsedJson = JSON.parse(response.text.trim());
+        const parsedJson = JSON.parse(response.text());
 
         const { error } = await supabase.from('summaries').update({ questions: parsedJson.questions }).eq('id', currentSummaryId);
         if (error) throw error;
@@ -1203,7 +1203,7 @@ const App = () => {
         if (!summary) return "Contexto não encontrado.";
         const prompt = `Contexto do resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}". Pergunta: "${questionText}". Resposta correta: "${correctAnswer}". Explique brevemente por que esta é a resposta correta.`;
         const response = await ai.models.generateContent({ /* ... */ }); // Adapte para a nova sintaxe se necessário
-        const parsedJson = JSON.parse(response.text.trim());
+        const parsedJson = JSON.parse(response.text());
         return parsedJson.explanation;
     };
 
