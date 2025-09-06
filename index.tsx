@@ -1,26 +1,29 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from "@google/genai";
-import { supabase } from './supabaseClient'; // Importe seu cliente Supabase
-import { Session } from '@supabase/supabase-js';
+import { createClient, Session } from '@supabase/supabase-js';
+
+// --- CONFIGURAÇÃO DO SUPABASE ---
+// Cole suas credenciais do Supabase aqui
+const supabaseUrl = 'https://vylpdfeqdylcqxzllnbh.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5bHBkZmVxZHlsY3F4emxsbmJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxNjY3NzMsImV4cCI6MjA3Mjc0Mjc3M30.muT9yFZaHottkDM-acc6iU5XHqbo7yqTF-bpPoAotMY';
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 
-// --- DADOS ESTÁTICOS ---
-// Mantido localmente, pois raramente muda. Poderia vir de uma tabela 'terms' no futuro.
+// --- DADOS MOCADOS (APENAS PARA PREENCHER A INTERFACE INICIALMENTE) ---
+// Em uma aplicação real, os termos também viriam do banco de dados.
 const initialTerms = Array.from({ length: 12 }, (_, i) => ({
     id: `t${i + 1}`,
     name: `${i + 1}º Termo`,
 }));
 
-
-// --- CONFIGURAÇÃO DA IA ---
-// Lembre-se de configurar esta variável de ambiente no seu projeto React (ex: .env.local)
-const API_KEY = process.env.GEMINI_API_KEY;
+// --- CONFIGURAÇÃO DA IA (Mantido do código original) ---
+const API_KEY = process.env.API_KEY;
 if (!API_KEY) {
-  throw new Error("A variável de ambiente GEMINI_API_KEY não está definida");
+  throw new Error("API_KEY environment variable not set");
 }
 const ai = new GoogleGenAI({ apiKey: API_KEY });
-const model = "gemini-1.5-flash";
+const model = "gemini-2.5-flash";
 
 const enhancedContentSchema = {
     type: Type.OBJECT,
@@ -69,7 +72,7 @@ const quizExplanationSchema = {
 };
 
 
-// --- FUNÇÕES AUXILIARES ---
+// --- FUNÇÕES AUXILIARES (HELPER FUNCTIONS) ---
 const subjectColors = ['#007BFF', '#28A745', '#DC3545', '#FFC107', '#17A2B8', '#6610f2', '#fd7e14', '#20c997', '#e83e8c'];
 const getNewSubjectColor = (existingSubjects) => {
     const usedColors = new Set(existingSubjects.map(s => s.color));
@@ -93,7 +96,7 @@ const getSpotifyEmbedUrl = (url) => {
     return null;
 };
 
-// --- COMPONENTES BÁSICOS DE UI ---
+// --- COMPONENTES ---
 
 const ThemeToggle = ({ theme, toggleTheme }) => (
     <div className="theme-switch">
@@ -136,23 +139,24 @@ const Breadcrumbs = ({ paths }) => (
     </nav>
 );
 
-
-// --- TELA DE AUTENTICAÇÃO (ATUALIZADA com Placeholders) ---
-const AuthScreen = ({ theme, toggleTheme }) => {
-  const [loading, setLoading] = useState(false);
+// --- TELA DE LOGIN CORRIGIDA ---
+const LoginScreen = ({ theme, toggleTheme }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleAuth = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-    } catch (err) {
-      setError(err.error_description || err.message);
+
+    } catch (error) { // <-- CORREÇÃO: Removido o "=>" daqui
+      setError("Email ou senha inválidos. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -163,34 +167,33 @@ const AuthScreen = ({ theme, toggleTheme }) => {
       <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
       <div className="login-card">
         <h1>Med<span>flix</span></h1>
-        <p>Acesse sua conta para continuar</p>
-        <form onSubmit={handleAuth}>
+        <p>Faça login para continuar</p>
+        <form onSubmit={handleLogin}>
           <div className="form-group">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email-input">Email</label>
             <input
-              id="email"
+              id="email-input"
               className="input"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="digite seu email"
               required
-              placeholder="Digite seu email"
             />
           </div>
           <div className="form-group">
-            <label htmlFor="password">Senha</label>
+            <label htmlFor="password-input">Senha</label>
             <input
-              id="password"
+              id="password-input"
               className="input"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder="digite sua senha"
               required
-              placeholder="Digite sua senha"
             />
           </div>
-
-          {error && <p style={{color: 'var(--danger-accent)', marginTop: '1rem'}}>{error}</p>}
+          {error && <p className="error-message">{error}</p>}
           <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? 'Carregando...' : 'Entrar'}
           </button>
@@ -200,7 +203,6 @@ const AuthScreen = ({ theme, toggleTheme }) => {
   );
 };
 
-// --- MODAIS DE IA ---
 
 const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
     const [isLoading, setIsLoading] = useState(false);
@@ -217,7 +219,6 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
         setError('');
         try {
             setLoadingMessage('Extraindo texto do áudio...');
-            // NOTA: Simulação. Implementação real necessitaria de uma API de Speech-to-Text.
             const textFromAudio = `(Texto simulado extraído do áudio: Novas descobertas sobre o sistema nervoso periférico indicam uma maior plasticidade nos nervos cranianos, especialmente no nervo vago. Além disso, a barreira hematoencefálica pode ser temporariamente permeabilizada por ultrassom focado, permitindo a entrega de medicamentos.)`;
 
             setLoadingMessage('Comparando com o resumo atual...');
@@ -237,13 +238,10 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
 
             const response = await ai.models.generateContent({
                 model: model,
-                contents: [{ role: 'user', parts: [{ text: updatePrompt }] }],
-                generationConfig: { responseMimeType: "application/json" },
-                // @ts-ignore
-                tools: [{ functionDeclarations: [ { name: 'enhancedContentSchema', description: '', parameters: enhancedContentSchema }] }]
+                contents: updatePrompt,
+                config: { responseMimeType: "application/json", responseSchema: enhancedContentSchema },
             });
-            // @ts-ignore
-            const parsedJson = JSON.parse(response.text());            
+            const parsedJson = JSON.parse(response.text.trim());
             setLoadingMessage('Resumo atualizado com sucesso!');
             await new Promise(res => setTimeout(res, 1000));
             onUpdate(parsedJson.enhancedContent);
@@ -308,13 +306,9 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
             const response = await ai.models.generateContent({
                 model: model,
                 contents: prompt,
-                generationConfig: { responseMimeType: "application/json", responseSchema: enhancedContentSchema },
+                config: { responseMimeType: "application/json", responseSchema: enhancedContentSchema },
             });
-
-            // --- A CORREÇÃO ESTÁ AQUI ---
-            // Substituímos a linha complexa e frágil por esta, que é mais robusta.
-            const parsedJson = JSON.parse(response.text());
-
+            const parsedJson = JSON.parse(response.text.trim());
             setLoadingMessage('Conteúdo aprimorado com sucesso!');
             await new Promise(res => setTimeout(res, 1000));
             onContentEnhanced(parsedJson.enhancedContent);
@@ -354,10 +348,7 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
     );
 };
 
-// --- COMPONENTE DASHBOARD ---
-
-const Dashboard = ({ userProfile, onLogout, onSelectSubject, subjects, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed }) => {
-  const termName = initialTerms.find(t => t.id === userProfile.term_id)?.name;
+const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, userProgress }) => {
   const isSearching = searchQuery.trim() !== '';
 
   return (
@@ -366,7 +357,7 @@ const Dashboard = ({ userProfile, onLogout, onSelectSubject, subjects, onAddSubj
         <h1>{termName}</h1>
         <div className="header-actions">
             <ThemeToggle theme={theme} toggleTheme={toggleTheme}/>
-            {userProfile.streak > 0 && <div className="streak-display">🔥 {userProfile.streak}</div>}
+            {userProgress.streak > 0 && <div className="streak-display">🔥 {userProgress.streak}</div>}
             <button className="btn btn-secondary" onClick={onLogout}>Sair</button>
         </div>
       </div>
@@ -406,7 +397,7 @@ const Dashboard = ({ userProfile, onLogout, onSelectSubject, subjects, onAddSubj
         </div>
       ) : (
         <>
-          {lastViewed && lastViewed.length > 0 && (
+          {lastViewed.length > 0 && (
             <div className="last-viewed-section">
                 <h2>Continue de Onde Parou</h2>
                 <div className="last-viewed-grid">
@@ -421,13 +412,14 @@ const Dashboard = ({ userProfile, onLogout, onSelectSubject, subjects, onAddSubj
           )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
-              {userProfile.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
+              {/* Botão de adicionar só aparece para o admin */}
+              {user.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
           </div>
 
           <div className="subject-grid">
             {subjects.map(subject => {
               const subjectSummaries = searchResults.allSummaries.filter(s => s.subject_id === subject.id);
-              const completedCount = subjectSummaries.filter(s => userProfile.completed_summaries.includes(s.id)).length;
+              const completedCount = subjectSummaries.filter(s => userProgress.completedSummaries.includes(s.id)).length;
               const progress = subjectSummaries.length > 0 ? (completedCount / subjectSummaries.length) * 100 : 0;
               return (
                 <div key={subject.id} className="subject-card" style={{ backgroundColor: subject.color }} onClick={() => onSelectSubject(subject)}>
@@ -440,7 +432,8 @@ const Dashboard = ({ userProfile, onLogout, onSelectSubject, subjects, onAddSubj
                         <div className="progress-bar-inner" style={{ width: `${progress}%` }}></div>
                     </div>
                   </div>
-                  {userProfile.role === 'admin' && (
+                  {/* Ícones de editar/deletar só aparecem para o admin */}
+                  {user.role === 'admin' && (
                     <div className="card-actions">
                       <IconButton onClick={(e) => onEditSubject(subject)}><EditIcon /></IconButton>
                       <IconButton onClick={(e) => onDeleteSubject(subject.id)}><DeleteIcon /></IconButton>
@@ -456,22 +449,36 @@ const Dashboard = ({ userProfile, onLogout, onSelectSubject, subjects, onAddSubj
   );
 };
 
-// --- MODAIS DE CRUD E EDITOR ---
-
-const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects }) => {
+const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user, terms }) => {
     const [name, setName] = useState('');
+    const [selectedTermId, setSelectedTermId] = useState('');
+
     useEffect(() => {
         if (isOpen) {
             setName(subject ? subject.name : '');
+            setSelectedTermId(subject ? subject.term_id : (user?.role === 'admin' ? '' : user?.term_id));
         }
-    }, [isOpen, subject]);
+    }, [isOpen, subject, user]);
 
     if (!isOpen) return null;
 
     const handleSubmit = (e) => {
         e.preventDefault();
+
+        // --- ESTA É A VALIDAÇÃO QUE ESTAVA FALTANDO ---
+        // Se o usuário for admin e não tiver selecionado um período, mostre um alerta e pare.
+        if (user?.role === 'admin' && !selectedTermId) {
+            alert('Por favor, selecione um período para esta disciplina.');
+            return; // Impede o envio do formulário
+        }
+        // -------------------------------------------------
+
         const finalColor = (subject && subject.color) ? subject.color : getNewSubjectColor(existingSubjects);
-        onSave({ ...subject, name, color: finalColor });
+
+        // Usa o term_id do estado do modal (para admins) ou o do perfil do usuário (para estudantes)
+        const termIdToSave = user?.role === 'admin' ? selectedTermId : user?.term_id;
+
+        onSave({ ...subject, name, color: finalColor, term_id: termIdToSave });
     };
 
     return (
@@ -483,6 +490,25 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects }) =>
                         <label htmlFor="subject-name">Nome da Disciplina</label>
                         <input id="subject-name" className="input" type="text" value={name} onChange={e => setName(e.target.value)} required />
                     </div>
+
+                    {user?.role === 'admin' && (
+                        <div className="form-group">
+                            <label htmlFor="term-select-subject">Período</label>
+                            <select
+                                id="term-select-subject"
+                                className="select-input"
+                                value={selectedTermId}
+                                onChange={(e) => setSelectedTermId(e.target.value)}
+                                required // O 'required' aqui ajuda, mas a validação no JS é mais segura
+                            >
+                                <option value="" disabled>Selecione um período...</option>
+                                {terms.map(term => (
+                                    <option key={term.id} value={term.id}>{term.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     <div className="modal-actions">
                         <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
                         <button type="submit" className="btn btn-primary">Salvar</button>
@@ -544,7 +570,7 @@ const SummaryModal = ({ isOpen, onClose, onSave, summary, subjectId }) => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        onSave({ ...summary, title, content, audio, video, subjectId });
+        onSave({ ...summary, title, content, audio, video, subject_id: subjectId });
     };
 
     return (
@@ -601,14 +627,12 @@ const SummaryModal = ({ isOpen, onClose, onSave, summary, subjectId }) => {
     );
 };
 
-// --- COMPONENTE DE VISUALIZAÇÃO DA LISTA DE RESUMOS ---
-
-const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, onEditSummary, onDeleteSummary, userProfile, onAIEnhance }) => {
+const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, onEditSummary, onDeleteSummary, user, userProgress, onAIEnhance }) => {
     return (
         <div className="container summary-list-view">
             <div className="dashboard-header">
                 <h1>{subject.name}</h1>
-                 {userProfile.role === 'admin' && (
+                 {user.role === 'admin' && (
                     <div className="dashboard-main-actions">
                          <button className="btn btn-secondary" onClick={onAIEnhance}>
                            Aprimorar com IA
@@ -623,14 +647,14 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
             {summaries.length > 0 ? (
                 <ul className="summary-list">
                     {summaries.map(summary => {
-                        const isCompleted = userProfile.completed_summaries.includes(summary.id);
+                        const isCompleted = userProgress.completedSummaries.includes(summary.id);
                         return (
                             <li key={summary.id} className="summary-list-item">
                                 <div className="summary-list-item-title" onClick={() => onSelectSummary(summary)}>
                                     {isCompleted && <span className="completion-check"><CheckCircleIcon /></span>}
                                     {summary.title}
                                 </div>
-                                {userProfile.role === 'admin' && (
+                                {user.role === 'admin' && (
                                     <div className="summary-list-item-actions">
                                         <IconButton onClick={() => onEditSummary(summary)}><EditIcon/></IconButton>
                                         <IconButton onClick={() => onDeleteSummary(summary.id)}><DeleteIcon/></IconButton>
@@ -644,7 +668,7 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
                 <div className="empty-state">
                     <h2>Nenhum resumo aqui ainda</h2>
                     <p>Que tal começar adicionando o primeiro resumo para esta disciplina?</p>
-                    {userProfile.role === 'admin' && (
+                    {user.role === 'admin' && (
                         <div className="empty-state-actions">
                              <button className="btn btn-secondary" onClick={onAIEnhance}>Gerar com IA</button>
                             <button className="btn btn-primary" onClick={onAddSummary}>Criar Manualmente</button>
@@ -655,8 +679,6 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
         </div>
     );
 };
-
-// --- COMPONENTES DE VISUALIZAÇÃO DE CONTEÚDO ---
 
 const QuizView = ({ questions, onGetExplanation }) => {
     const [answers, setAnswers] = useState({});
@@ -684,12 +706,6 @@ const QuizView = ({ questions, onGetExplanation }) => {
             }
         }
     };
-
-    // Reseta as respostas quando as questões mudam
-    useEffect(() => {
-        setAnswers({});
-        setExplanations({});
-    }, [questions]);
 
     return (
         <div className="quiz-container">
@@ -743,15 +759,13 @@ const TableOfContents = ({ content }) => {
         const newHeadings = [];
         summaryContentElement.querySelectorAll('h2, h3').forEach(h => {
             const text = h.textContent;
-            if (text) {
-                const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-                h.id = id;
-                newHeadings.push({
-                    id,
-                    text,
-                    level: h.tagName.toLowerCase() === 'h2' ? 1 : 2
-                });
-            }
+            const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+            h.id = id;
+            newHeadings.push({
+                id,
+                text,
+                level: h.tagName.toLowerCase() === 'h2' ? 1 : 2
+            });
         });
         setHeadings(newHeadings);
     }, [content]);
@@ -782,50 +796,30 @@ const TableOfContents = ({ content }) => {
 
 const YoutubePlayer = ({ url }) => {
     const videoId = getYoutubeVideoId(url);
-    if (!videoId) {
-        return <p>Link do YouTube inválido.</p>;
-    }
-
+    if (!videoId) return <p>Link do YouTube inválido.</p>;
     return (
         <div className="youtube-player-container">
-            <iframe
-                src={`https://www.youtube.com/embed/${videoId}`}
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                title="Vídeo do YouTube"
-            ></iframe>
+            <iframe src={`https://www.youtube.com/embed/${videoId}`} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen title="Vídeo do YouTube"></iframe>
         </div>
     );
 };
 
 const SpotifyPlayer = ({ url }) => {
     const embedUrl = getSpotifyEmbedUrl(url);
-    if (!embedUrl) {
-        return <p>Link do Spotify inválido ou não suportado.</p>;
-    }
-
+    if (!embedUrl) return <p>Link do Spotify inválido ou não suportado.</p>;
     return (
         <div className="spotify-player-container">
-            <iframe
-                src={`${embedUrl}?utm_source=generator`}
-                frameBorder="0"
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                loading="lazy"
-                title="Player do Spotify"
-            ></iframe>
+            <iframe src={`${embedUrl}?utm_source=generator`} frameBorder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title="Player do Spotify"></iframe>
         </div>
     );
 };
 
-// --- COMPONENTE DE VISUALIZAÇÃO DOS DETALHES DO RESUMO ---
 
-const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, userProfile, onAIUpdate }) => {
+const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate }) => {
     const [activeTab, setActiveTab] = useState('summary');
     const [isGenerating, setIsGenerating] = useState(false);
 
     useEffect(() => {
-        // Quando o resumo muda, reseta para a aba principal
         setActiveTab('summary');
     }, [summary]);
 
@@ -839,7 +833,7 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
         { id: 'summary', label: 'Resumo', condition: true },
         { id: 'video', label: 'Vídeo', condition: !!summary.video },
         { id: 'podcast', label: 'Podcast', condition: !!summary.audio },
-        { id: 'questions', label: 'Questões', condition: (summary.questions && summary.questions.length > 0) || userProfile.role === 'admin' }
+        { id: 'questions', label: 'Questões', condition: (summary.questions && summary.questions.length > 0) || user.role === 'admin' }
     ].filter(tab => tab.condition);
 
     return (
@@ -853,7 +847,7 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                             {isCompleted ? <CheckCircleIcon /> : null}
                             {isCompleted ? 'Concluído' : 'Marcar como Concluído'}
                         </button>
-                        {userProfile.role === 'admin' && (
+                        {user.role === 'admin' && (
                             <>
                                 <button className="btn btn-secondary" onClick={onAIUpdate}><SparklesIcon />Atualizar com IA</button>
                                 <IconButton onClick={onEdit}><EditIcon/></IconButton>
@@ -865,13 +859,7 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
 
                 <nav className="tabs-nav">
                     {availableTabs.map(tab => (
-                        <button
-                            key={tab.id}
-                            className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
-                            onClick={() => setActiveTab(tab.id)}
-                            aria-controls={`tab-panel-${tab.id}`}
-                            role="tab"
-                        >
+                        <button key={tab.id} className={`tab-button ${activeTab === tab.id ? 'active' : ''}`} onClick={() => setActiveTab(tab.id)} aria-controls={`tab-panel-${tab.id}`} role="tab">
                             {tab.label}
                         </button>
                     ))}
@@ -881,25 +869,14 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                     {activeTab === 'summary' && (
                         <div id="tab-panel-summary" role="tabpanel" className="summary-content" dangerouslySetInnerHTML={{ __html: summary.content }}></div>
                     )}
-
-                    {activeTab === 'video' && (
-                        <div id="tab-panel-video" role="tabpanel">
-                            {summary.video && <YoutubePlayer url={summary.video} />}
-                        </div>
-                    )}
-
-                    {activeTab === 'podcast' && (
-                        <div id="tab-panel-podcast" role="tabpanel">
-                            {summary.audio && <SpotifyPlayer url={summary.audio} />}
-                        </div>
-                    )}
-
+                    {activeTab === 'video' && <div id="tab-panel-video" role="tabpanel">{summary.video && <YoutubePlayer url={summary.video} />}</div>}
+                    {activeTab === 'podcast' && <div id="tab-panel-podcast" role="tabpanel">{summary.audio && <SpotifyPlayer url={summary.audio} />}</div>}
                     {activeTab === 'questions' && (
                         <div id="tab-panel-questions" role="tabpanel">
                              {summary.questions && summary.questions.length > 0 ? (
                                 <QuizView questions={summary.questions} onGetExplanation={onGetExplanation} />
                             ) : (
-                                userProfile.role === 'admin' && (
+                                user.role === 'admin' && (
                                     <div className="quiz-container empty-quiz">
                                         <p>Ainda não há questões para este resumo.</p>
                                         <button className="btn btn-primary" onClick={handleGenerateQuiz} disabled={isGenerating}>
@@ -917,121 +894,147 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
     );
 };
 
-// --- COMPONENTE PRINCIPAL APP ---
+// Componente para o usuário escolher seu termo inicial
+const TermSelector = ({ user, terms, onTermUpdate }) => {
+    const [selectedTerm, setSelectedTerm] = useState('');
+    const [loading, setLoading] = useState(false);
 
+    const handleSave = async () => {
+        if (!selectedTerm) {
+            alert("Por favor, selecione um termo.");
+            return;
+        }
+        setLoading(true);
+        await onTermUpdate(selectedTerm);
+        setLoading(false);
+    };
+
+    return (
+        <div className="login-screen">
+            <div className="login-card">
+                <h1>Bem-vindo(a)!</h1>
+                <p>Para começar, selecione o seu período atual.</p>
+                <div className="form-group">
+                    <label htmlFor="term-select">Seu Período</label>
+                    <select
+                        id="term-select"
+                        className="select-input"
+                        value={selectedTerm}
+                        onChange={(e) => setSelectedTerm(e.target.value)}
+                    >
+                        <option value="" disabled>Selecione...</option>
+                        {terms.map(term => (
+                            <option key={term.id} value={term.id}>{term.name}</option>
+                        ))}
+                    </select>
+                </div>
+                <button onClick={handleSave} className="btn btn-primary" disabled={loading}>
+                    {loading ? "Salvando..." : "Salvar e Continuar"}
+                </button>
+            </div>
+        </div>
+    );
+};
+
+
+// --- COMPONENTE PRINCIPAL APP ATUALIZADO E COMPLETO ---
 const App = () => {
-  // Estado de Autenticação e Perfil
+  // State de Autenticação e UI
   const [session, setSession] = useState(null);
-  const [userProfile, setUserProfile] = useState(null);
-  const [loadingApp, setLoadingApp] = useState(true);
-
-  // Estado da Aplicação
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
-  const [view, setView] = useState('dashboard'); // login, dashboard, subject, summary
+  const [user, setUser] = useState(null);
+  const [terms, setTerms] = useState([]);
+  const [theme, setTheme] = useState('dark');
+  const [view, setView] = useState('dashboard');
   const [currentSubjectId, setCurrentSubjectId] = useState(null);
   const [currentSummaryId, setCurrentSummaryId] = useState(null);
 
-  // Dados do Supabase
+  // State de Dados
   const [subjects, setSubjects] = useState([]);
   const [summaries, setSummaries] = useState([]);
-  const [lastViewed, setLastViewed] = useState([]); // Ainda gerenciado localmente via localStorage
+  const [userProgress, setUserProgress] = useState({ completedSummaries: [], lastCompletionDate: null, streak: 0 });
+  const [lastViewed, setLastViewed] = useState([]);
 
-  // Modais e Busca
+  // State de Modais
   const [isSubjectModalOpen, setSubjectModalOpen] = useState(false);
   const [isSummaryModalOpen, setSummaryModalOpen] = useState(false);
   const [isAIEnhanceModalOpen, setAIEnhanceModalOpen] = useState(false);
   const [isAIUpdateModalOpen, setAIUpdateModalOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
   const [editingSummary, setEditingSummary] = useState(null);
+
+  // State de Busca
   const [searchQuery, setSearchQuery] = useState('');
 
-  // --- EFEITOS DE CICLO DE VIDA ---
-
+  // Gerencia a sessão de autenticação e busca os termos
   useEffect(() => {
-    // Gerencia a sessão
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setLoadingApp(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
 
+    const fetchTerms = async () => {
+        const { data } = await supabase.from('terms').select('*').order('id');
+        setTerms(data || []);
+    };
+    fetchTerms();
+
     return () => subscription.unsubscribe();
   }, []);
 
+  // Busca o perfil do usuário e os dados do seu termo quando a sessão muda
   useEffect(() => {
-    // Busca dados quando a sessão é estabelecida
-    const fetchData = async () => {
-      if (session?.user) {
-        // 1. Buscar Perfil do Usuário
-        let { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        if (profileError && profileError.code === 'PGRST116') { // Código para "zero rows found"
-            // Primeiro login: perfil não existe, vamos criar um.
-            const { data: newProfile, error: insertError } = await supabase
-                .from('profiles')
-                .insert({
-                    id: session.user.id,
-                    role: session.user.user_metadata.role || 'student',
-                    term_id: session.user.user_metadata.term_id || 't1',
-                    completed_summaries: [],
-                    streak: 0,
-                }).select().single();
-            if (insertError) console.error("Error creating profile:", insertError);
-            profile = newProfile;
-        } else if (profileError) {
-            console.error("Error fetching profile:", profileError);
+    if (session?.user) {
+      const fetchUserProfileAndData = async () => {
+        const { data: profileData, error: profileError } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+        if (profileError) {
+          console.error("Erro ao buscar perfil:", profileError);
+          return;
         }
-        setUserProfile(profile);
 
-        // 2. Buscar Disciplinas e Resumos
-        if (profile) {
-          const { data: subjectsData, error: subjectsError } = await supabase
-            .from('subjects')
-            .select('*, summaries(*)')
-            .eq('term_id', profile.term_id);
+        const fullUser = { ...session.user, ...profileData };
+        setUser(fullUser);
 
-          if (subjectsError) {
-            console.error("Error fetching subjects/summaries:", subjectsError);
-          } else {
-            const allSummaries = subjectsData.flatMap(s => s.summaries || []).map(sum => ({...sum, subjectId: sum.subject_id}));
-            setSubjects(subjectsData.map(({summaries, ...s}) => s));
-            setSummaries(allSummaries);
-          }
+        if (fullUser.term_id) {
+            const { data: subjectsData } = await supabase.from('subjects').select('*').eq('term_id', fullUser.term_id);
+            setSubjects(subjectsData || []);
+
+            const { data: summariesData } = await supabase.from('summaries').select('*');
+            setSummaries(summariesData || []);
+        } else {
+            setSubjects([]);
+            setSummaries([]);
         }
-      } else {
-        setUserProfile(null);
-        setSubjects([]);
-        setSummaries([]);
-      }
-    };
-    fetchData();
+      };
+
+      fetchUserProfileAndData();
+
+      const savedProgress = localStorage.getItem(`userProgress_${session.user.id}`);
+      if (savedProgress) setUserProgress(JSON.parse(savedProgress));
+
+      const savedLastViewed = localStorage.getItem(`lastViewed_${session.user.id}`);
+      if(savedLastViewed) setLastViewed(JSON.parse(savedLastViewed));
+    } else {
+      setUser(null);
+    }
   }, [session]);
 
+  // Salva dados no localStorage
   useEffect(() => {
-    // Gerencia o tema
     localStorage.setItem('theme', theme);
+    if (session) {
+      localStorage.setItem(`userProgress_${session.user.id}`, JSON.stringify(userProgress));
+      localStorage.setItem(`lastViewed_${session.user.id}`, JSON.stringify(lastViewed));
+    }
+  }, [theme, userProgress, lastViewed, session]);
+
+  useEffect(() => {
     document.body.className = theme === 'dark' ? '' : 'light-mode';
   }, [theme]);
 
-  useEffect(() => {
-    // Gerencia os resumos vistos por último
-    const savedLastViewed = localStorage.getItem('lastViewed');
-    if (savedLastViewed) setLastViewed(JSON.parse(savedLastViewed));
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('lastViewed', JSON.stringify(lastViewed));
-  }, [lastViewed]);
-
-
-  // --- FUNÇÕES DE NAVEGAÇÃO E UI ---
+  const handleLogout = () => supabase.auth.signOut();
 
   const handleSelectSubject = (subject) => {
     setCurrentSubjectId(subject.id);
@@ -1054,131 +1057,87 @@ const App = () => {
       setView('subject');
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setView('dashboard');
-    setCurrentSubjectId(null);
-    setCurrentSummaryId(null);
+  const handleTermUpdate = async (newTermId) => {
+      const { data, error } = await supabase
+          .from('profiles')
+          .update({ term_id: newTermId })
+          .eq('id', user.id)
+          .select()
+          .single();
+
+      if (error) {
+          alert("Erro ao salvar o termo.");
+      } else if (data) {
+          setUser(prevUser => ({ ...prevUser, ...data }));
+      }
   };
 
-  // --- FUNÇÕES CRUD (ASSÍNCRONAS COM SUPABASE) ---
-
   const handleSaveSubject = async (subjectData) => {
-    try {
-        let updatedSubjects = [...subjects];
-        if (subjectData.id) { // Edição
-            const { data, error } = await supabase.from('subjects').update({ name: subjectData.name, color: subjectData.color }).eq('id', subjectData.id).select().single();
-            if (error) throw error;
-            updatedSubjects = subjects.map(s => s.id === data.id ? data : s);
-        } else { // Criação
-            const { data, error } = await supabase.from('subjects').insert({
-                name: subjectData.name,
-                color: getNewSubjectColor(subjects),
-                term_id: userProfile.term_id
-            }).select().single();
-            if (error) throw error;
-            updatedSubjects.push(data);
-        }
-        setSubjects(updatedSubjects);
-    } catch(error) {
-        alert("Erro ao salvar disciplina: " + error.message);
-    } finally {
-        setSubjectModalOpen(false);
-        setEditingSubject(null);
+    if (!subjectData.term_id) {
+        alert("Ocorreu um erro: o período da disciplina não foi especificado.");
+        return;
     }
+
+    if (subjectData.id) {
+        const { data, error } = await supabase.from('subjects').update({ name: subjectData.name, color: subjectData.color, term_id: subjectData.term_id }).eq('id', subjectData.id).select();
+        if (error) alert(error.message);
+        else if (data) setSubjects(subjects.map(s => s.id === data[0].id ? data[0] : s));
+    } else {
+        const { data, error } = await supabase.from('subjects').insert({ name: subjectData.name, color: subjectData.color, user_id: session.user.id, term_id: subjectData.term_id }).select();
+        if (error) alert(error.message);
+        else if (data) {
+            if (String(data[0].term_id) === String(user.term_id)) {
+                setSubjects([...subjects, data[0]]);
+            }
+        }
+    }
+    setSubjectModalOpen(false);
+    setEditingSubject(null);
   };
 
   const handleDeleteSubject = async (subjectId) => {
     if (window.confirm("Tem certeza que deseja excluir esta disciplina e todos os seus resumos?")) {
-        try {
-            const { error } = await supabase.from('subjects').delete().eq('id', subjectId);
-            if (error) throw error;
-            setSubjects(prev => prev.filter(s => s.id !== subjectId));
-            setSummaries(prev => prev.filter(s => s.subject_id !== subjectId));
-        } catch (error) {
-            alert("Erro ao deletar disciplina: " + error.message);
+        await supabase.from('summaries').delete().eq('subject_id', subjectId);
+        const { error } = await supabase.from('subjects').delete().eq('id', subjectId);
+        if (error) alert(error.message);
+        else {
+          setSubjects(subjects.filter(s => s.id !== subjectId));
+          setSummaries(summaries.filter(s => s.subject_id !== subjectId));
         }
     }
   };
 
   const handleSaveSummary = async (summaryData) => {
-      const dataToUpsert = { title: summaryData.title, content: summaryData.content, audio: summaryData.audio, video: summaryData.video, subject_id: summaryData.subjectId };
-      try {
-          let updatedSummaries = [...summaries];
-          if (summaryData.id) { // Edição
-              const { data, error } = await supabase.from('summaries').update(dataToUpsert).eq('id', summaryData.id).select().single();
-              if (error) throw error;
-              updatedSummaries = summaries.map(s => s.id === data.id ? {...data, subjectId: data.subject_id} : s);
-          } else { // Criação
-              const { data, error } = await supabase.from('summaries').insert(dataToUpsert).select().single();
-              if (error) throw error;
-              updatedSummaries.push({...data, subjectId: data.subject_id});
-          }
-          setSummaries(updatedSummaries);
-      } catch (error) {
-          alert("Erro ao salvar resumo: " + error.message);
-      } finally {
-          setSummaryModalOpen(false);
-          setEditingSummary(null);
-      }
+    const summaryPayload = { title: summaryData.title, content: summaryData.content, audio: summaryData.audio, video: summaryData.video, subject_id: summaryData.subject_id, user_id: session.user.id };
+    if (summaryData.id) {
+        const { data, error } = await supabase.from('summaries').update(summaryPayload).eq('id', summaryData.id).select();
+        if (error) alert(error.message);
+        else if (data) setSummaries(summaries.map(s => s.id === data[0].id ? data[0] : s));
+    } else {
+        const { data, error } = await supabase.from('summaries').insert(summaryPayload).select();
+        if (error) alert(error.message);
+        else if (data) setSummaries([...summaries, data[0]]);
+    }
+    setSummaryModalOpen(false);
+    setEditingSummary(null);
   };
 
   const handleDeleteSummary = async (summaryId) => {
       if (window.confirm("Tem certeza que deseja excluir este resumo?")) {
-          try {
-              const { error } = await supabase.from('summaries').delete().eq('id', summaryId);
-              if (error) throw error;
-              setSummaries(prev => prev.filter(s => s.id !== summaryId));
-              handleBackToSubject();
-          } catch(error) {
-              alert("Erro ao deletar resumo: " + error.message);
+          const { error } = await supabase.from('summaries').delete().eq('id', summaryId);
+          if (error) alert(error.message);
+          else {
+            setSummaries(summaries.filter(s => s.id !== summaryId));
+            handleBackToSubject();
           }
       }
   };
 
   const handleUpdateSummaryContent = async (summaryId, newContent) => {
-      try {
-          const { data, error } = await supabase.from('summaries').update({ content: newContent }).eq('id', summaryId).select().single();
-          if (error) throw error;
-          setSummaries(prev => prev.map(s => s.id === summaryId ? {...data, subjectId: data.subject_id} : s));
-          setAIUpdateModalOpen(false);
-      } catch (error) {
-          alert("Erro ao atualizar conteúdo: " + error.message);
-      }
-  };
-
-  // --- FUNÇÕES DE PROGRESSO E IA (ASSÍNCRONAS COM SUPABASE) ---
-
-  const handleToggleComplete = async () => {
-    const isCompleted = userProfile.completed_summaries.includes(currentSummaryId);
-    const newCompleted = isCompleted ? userProfile.completed_summaries.filter(id => id !== currentSummaryId) : [...new Set([...userProfile.completed_summaries, currentSummaryId])];
-
-    // Lógica da sequência (streak)
-    const today = new Date().toISOString().split('T')[0];
-    let newStreak = userProfile.streak || 0;
-    let newLastCompletionDate = userProfile.last_completion_date;
-
-    if (!isCompleted) { // Apenas atualiza ao completar, não ao desmarcar
-        if (newLastCompletionDate !== today) {
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            if (newLastCompletionDate === yesterday.toISOString().split('T')[0]) {
-                newStreak += 1; // Continua streak
-            } else {
-                newStreak = 1; // Nova streak
-            }
-            newLastCompletionDate = today;
-        }
-    }
-
-    const updatedProfileFields = { completed_summaries: newCompleted, streak: newStreak, last_completion_date: newLastCompletionDate };
-    setUserProfile(prev => ({ ...prev, ...updatedProfileFields })); // Atualização otimista da UI
-
-    const { error } = await supabase.from('profiles').update(updatedProfileFields).eq('id', userProfile.id);
-    if (error) {
-        alert("Erro ao salvar progresso.");
-        setUserProfile(userProfile); // Reverte em caso de erro
-    }
+      const { data, error } = await supabase.from('summaries').update({ content: newContent }).eq('id', summaryId).select();
+      if (error) alert(error.message);
+      else if (data) setSummaries(summaries.map(s => s.id === data[0].id ? data[0] : s));
+      setAIUpdateModalOpen(false);
   };
 
   const handleGenerateQuiz = async () => {
@@ -1186,15 +1145,14 @@ const App = () => {
     if (!summary) return;
     try {
         const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere um quiz. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
-        const response = await ai.models.generateContent({ /* ... */ }); // Adapte para a nova sintaxe se necessário
-        const parsedJson = JSON.parse(response.text());
-
+        const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json", responseSchema: quizSchema } });
+        const parsedJson = JSON.parse(response.text.trim());
         const { error } = await supabase.from('summaries').update({ questions: parsedJson.questions }).eq('id', currentSummaryId);
         if (error) throw error;
-        setSummaries(prev => prev.map(s => s.id === currentSummaryId ? { ...s, questions: parsedJson.questions } : s));
+        setSummaries(summaries.map(s => s.id === currentSummaryId ? { ...s, questions: parsedJson.questions } : s));
     } catch (e) {
-        console.error("Erro ao gerar quiz:", e);
-        alert("Falha ao gerar o quiz.");
+        console.error("Erro ao gerar/salvar quiz:", e);
+        alert("Falha ao gerar o quiz. Tente novamente.");
     }
   };
 
@@ -1202,32 +1160,37 @@ const App = () => {
         const summary = summaries.find(s => s.id === currentSummaryId);
         if (!summary) return "Contexto não encontrado.";
         const prompt = `Contexto do resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}". Pergunta: "${questionText}". Resposta correta: "${correctAnswer}". Explique brevemente por que esta é a resposta correta.`;
-        const response = await ai.models.generateContent({ /* ... */ }); // Adapte para a nova sintaxe se necessário
-        const parsedJson = JSON.parse(response.text());
+        const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json", responseSchema: quizExplanationSchema } });
+        const parsedJson = JSON.parse(response.text.trim());
         return parsedJson.explanation;
     };
 
-  // --- ESTADO DERIVADO E MEMORIZADO ---
+  const handleToggleComplete = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const isCompleted = userProgress.completedSummaries.includes(currentSummaryId);
+    setUserProgress(prev => {
+        const completedSummaries = isCompleted ? prev.completedSummaries.filter(id => id !== currentSummaryId) : [...new Set([...prev.completedSummaries, currentSummaryId])];
+        if (isCompleted) return { ...prev, completedSummaries };
+        let { streak, lastCompletionDate } = prev;
+        if (lastCompletionDate !== today) {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            streak = (lastCompletionDate === yesterday.toISOString().split('T')[0]) ? streak + 1 : 1;
+        }
+        return { completedSummaries, streak, lastCompletionDate: today };
+    });
+  };
 
   const currentSubject = subjects.find(s => s.id === currentSubjectId);
   const currentSummary = summaries.find(s => s.id === currentSummaryId);
   const summariesForCurrentSubject = summaries.filter(s => s.subject_id === currentSubjectId);
 
   const searchResults = useMemo(() => {
-    const allSummariesWithSubject = summaries.map(sum => ({
-        ...sum,
-        subjectName: subjects.find(sub => sub.id === sum.subject_id)?.name || ''
-    }));
-
+    const allSummariesWithSubject = summaries.map(sum => ({ ...sum, subjectName: subjects.find(sub => sub.id === sum.subject_id)?.name || '' }));
     if (!searchQuery.trim()) return { subjects: [], summaries: [], allSummaries: summaries };
-
     const lowerCaseQuery = searchQuery.toLowerCase();
-
-    const filteredSubjects = subjects.filter(sub => sub.name.toLowerCase().includes(lowerCaseQuery))
-        .map(sub => ({ ...sub, summaryCount: summaries.filter(s => s.subject_id === sub.id).length }));
-
+    const filteredSubjects = subjects.filter(sub => sub.name.toLowerCase().includes(lowerCaseQuery)).map(sub => ({ ...sub, summaryCount: summaries.filter(s => s.subject_id === sub.id).length }));
     const filteredSummaries = allSummariesWithSubject.filter(sum => sum.title.toLowerCase().includes(lowerCaseQuery));
-
     return { subjects: filteredSubjects, summaries: filteredSummaries, allSummaries: summaries };
   }, [searchQuery, subjects, summaries]);
 
@@ -1235,60 +1198,28 @@ const App = () => {
     return lastViewed.map(lv => {
         const subject = subjects.find(s => s.id === lv.subject_id);
         return { ...lv, subjectName: subject?.name || 'Disciplina Removida' };
-    }).filter(lv => subjects.find(s => s.id === lv.subject_id)); // Apenas mostra se a disciplina ainda existe
+    }).filter(lv => subjects.find(s => s.id === lv.subject_id));
   }, [lastViewed, subjects]);
 
-
-  // --- LÓGICA DE RENDERIZAÇÃO ---
-
   const renderContent = () => {
-    if (!userProfile) return <div className="loader-container"><div className="loader"></div></div>;
+    if (!session || !user) {
+        return <LoginScreen theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />;
+    }
+
+    if (!user.term_id) {
+        return <TermSelector user={user} terms={terms} onTermUpdate={handleTermUpdate} />;
+    }
 
     switch (view) {
       case 'dashboard':
-        return <Dashboard
-                    userProfile={userProfile}
-                    onLogout={handleLogout}
-                    subjects={subjects}
-                    onSelectSubject={handleSelectSubject}
-                    onAddSubject={() => { setEditingSubject(null); setSubjectModalOpen(true); }}
-                    onEditSubject={(subject) => { setEditingSubject(subject); setSubjectModalOpen(true); }}
-                    onDeleteSubject={handleDeleteSubject}
-                    theme={theme}
-                    toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                    searchQuery={searchQuery}
-                    onSearchChange={(e) => setSearchQuery(e.target.value)}
-                    searchResults={searchResults}
-                    onSelectSummary={handleSelectSummary}
-                    lastViewed={lastViewedWithDetails}
-                />;
+        const termName = terms.find(t => t.id === user.term_id)?.name || "Meu Período";
+        return <Dashboard user={user} termName={termName} onLogout={handleLogout} subjects={subjects} onSelectSubject={handleSelectSubject} onAddSubject={() => { setEditingSubject(null); setSubjectModalOpen(true); }} onEditSubject={(subject) => { setEditingSubject(subject); setSubjectModalOpen(true); }} onDeleteSubject={handleDeleteSubject} theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} searchQuery={searchQuery} onSearchChange={(e) => setSearchQuery(e.target.value)} searchResults={searchResults} onSelectSummary={handleSelectSummary} lastViewed={lastViewedWithDetails} userProgress={userProgress} />;
       case 'subject':
-        if (!currentSubject) { handleBackToDashboard(); return null; }
-        return <SummaryListView
-                    subject={currentSubject}
-                    summaries={summariesForCurrentSubject}
-                    onSelectSummary={handleSelectSummary}
-                    onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }}
-                    onEditSummary={(summary) => { setEditingSummary(summary); setSummaryModalOpen(true); }}
-                    onDeleteSummary={handleDeleteSummary}
-                    userProfile={userProfile}
-                    onAIEnhance={() => setAIEnhanceModalOpen(true)}
-                />;
+        return <SummaryListView subject={currentSubject} summaries={summariesForCurrentSubject} onSelectSummary={handleSelectSummary} onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }} onEditSummary={(summary) => { setEditingSummary(summary); setSummaryModalOpen(true); }} onDeleteSummary={handleDeleteSummary} user={user} userProgress={userProgress} onAIEnhance={() => setAIEnhanceModalOpen(true)} />;
       case 'summary':
-        if (!currentSummary) { handleBackToSubject(); return null; }
-        return <SummaryDetailView
-                    summary={currentSummary}
-                    onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }}
-                    onDelete={() => handleDeleteSummary(currentSummary.id)}
-                    onGenerateQuiz={handleGenerateQuiz}
-                    onToggleComplete={handleToggleComplete}
-                    isCompleted={userProfile.completed_summaries.includes(currentSummary.id)}
-                    onGetExplanation={handleGetExplanation}
-                    userProfile={userProfile}
-                    onAIUpdate={() => setAIUpdateModalOpen(true)}
-                />;
+        return <SummaryDetailView summary={currentSummary} onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }} onDelete={() => handleDeleteSummary(currentSummary.id)} onGenerateQuiz={handleGenerateQuiz} onToggleComplete={handleToggleComplete} isCompleted={userProgress.completedSummaries.includes(currentSummary.id)} onGetExplanation={handleGetExplanation} user={user} onAIUpdate={() => setAIUpdateModalOpen(true)} />;
       default:
-        return null; // A tela de login é tratada fora desta função
+        return <LoginScreen theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />;
     }
   };
 
@@ -1303,37 +1234,9 @@ const App = () => {
       return paths;
   }, [view, currentSubject, currentSummary]);
 
-  // --- RENDERIZAÇÃO PRINCIPAL DO COMPONENTE ---
-
-    if (loadingApp) {
-      return (
-        // Aplicando a nova classe aqui
-        <div className="loading-overlay">
-            <div className="loader"></div>
-        </div>
-      );
-    }
-
-    if (!session) {
-      return <AuthScreen
-                  theme={theme}
-                  toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              />;
-    }
-
-    // Você pode adicionar um loader mais específico para o perfil se quiser
-    if (!userProfile) {
-        return (
-            <div className="loading-overlay">
-                <div className="loader"></div>
-                <p>Carregando perfil...</p>
-            </div>
-        );
-    }
-
   return (
     <>
-      {view !== 'dashboard' && (
+      {user && user.term_id && view !== 'dashboard' && (
           <div className="main-header">
               <Breadcrumbs paths={breadcrumbPaths} />
               <ThemeToggle theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
@@ -1341,13 +1244,14 @@ const App = () => {
       )}
       {renderContent()}
 
-      {/* Modals */}
       <SubjectModal
         isOpen={isSubjectModalOpen}
         onClose={() => setSubjectModalOpen(false)}
         onSave={handleSaveSubject}
         subject={editingSubject}
         existingSubjects={subjects}
+        user={user}
+        terms={terms}
       />
       <SummaryModal
         isOpen={isSummaryModalOpen}
@@ -1360,7 +1264,7 @@ const App = () => {
           handleSaveSummary({
               title: "Novo Resumo (Gerado por IA)",
               content: enhancedContent,
-              subjectId: currentSubjectId
+              subject_id: currentSubjectId
           });
           setAIEnhanceModalOpen(false);
       }} />}
@@ -1373,9 +1277,6 @@ const App = () => {
   );
 };
 
+
 const root = createRoot(document.getElementById('root'));
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+root.render(<App />);
