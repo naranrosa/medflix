@@ -1172,3 +1172,114 @@ body.light-mode .login-card .select-input:focus {
     display: inline-block;
     animation: spin .75s linear infinite;
 }
+
+/* ==========================================================================
+   --- REGRAS DE RESPONSIVIDADE ---
+   Estilos aplicados quando a tela for menor que 768px (tablets e celulares)
+   ========================================================================== */
+
+@media (max-width: 768px) {
+
+  /* 1. Ajustes Gerais de Espaçamento */
+  .container, .main-header {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  /* 2. Tela de Login */
+  .login-card {
+    padding: 2rem;
+    margin: 0 1rem; /* Evita que o card toque as bordas */
+  }
+
+  /* 3. Dashboard */
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+
+  .dashboard-header h1 {
+    font-size: 2rem;
+  }
+
+  .subject-grid {
+    /* Força a grade a ter apenas uma coluna */
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  /* 4. Lista de Resumos */
+  .summary-list-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  /* 5. Página de Detalhes do Resumo (A MUDANÇA MAIS IMPORTANTE) */
+  .summary-detail-layout {
+    /* Muda o layout de lado a lado para empilhado */
+    flex-direction: column;
+  }
+
+  .toc-container {
+    /* Esconde a Tabela de Conteúdos em telas pequenas */
+    display: none;
+  }
+
+  .summary-detail-title {
+    font-size: 1.8rem;
+  }
+
+  .summary-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .summary-detail-actions {
+    width: 100%;
+    justify-content: flex-start; /* Alinha os botões à esquerda */
+  }
+
+  /* Permite que as abas quebrem a linha se não couberem */
+  .tabs-nav {
+    flex-wrap: wrap;
+  }
+
+  .tab-content {
+    padding: 1.5rem;
+  }
+}
+
+
+/* ==========================================================================
+   Ajustes finos para celulares bem pequenos (largura menor que 480px)
+   ========================================================================== */
+
+@media (max-width: 480px) {
+  .header-actions {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    gap: 0.75rem;
+  }
+
+  .modal-content {
+    padding: 1.5rem;
+  }
+
+  .modal-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .modal-actions > div {
+    display: flex;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .modal-actions .btn {
+    flex-grow: 1; /* Faz os botões do modal ocuparem o espaço */
+  }
+}
