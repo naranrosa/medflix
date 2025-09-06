@@ -1283,3 +1283,113 @@ body.light-mode .login-card .select-input:focus {
     flex-grow: 1; /* Faz os botões do modal ocuparem o espaço */
   }
 }
+/* ==========================================================================
+   REGRAS DE RESPONSIVIDADE PARA CELULAR (Mobile First Adjustments)
+   ========================================================================== */
+
+/* Aplica estas regras para telas com largura máxima de 768px (tablets e celulares) */
+@media (max-width: 768px) {
+
+  /* --- GERAL & LAYOUT --- */
+
+  /* Reduz o padding geral dos contêineres para dar mais espaço ao conteúdo */
+  .container {
+    padding: 1rem;
+  }
+
+  /* Faz o cabeçalho principal quebrar a linha se ficar apertado */
+  .main-header {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 0.75rem 1rem;
+  }
+
+  /* --- TELA DE LOGIN --- */
+
+  /* Faz o card de login ocupar quase toda a largura da tela, com margens pequenas */
+  .login-card {
+    width: 95%;
+    padding: 1.5rem;
+  }
+
+  /* --- DASHBOARD --- */
+
+  /* Alinha os itens do cabeçalho do dashboard verticalmente e no centro */
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .dashboard-header .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* Transforma as grades em uma única coluna vertical */
+  .subject-grid,
+  .last-viewed-grid {
+    grid-template-columns: 1fr; /* Apenas uma coluna */
+    gap: 1rem;
+  }
+
+  /* --- TELA DE DETALHES DO RESUMO (IMPORTANTE!) --- */
+  
+  .summary-detail-layout {
+    grid-template-columns: 1fr; /* Remove a coluna lateral */
+  }
+
+  /* Esconde completamente o Índice (Table of Contents) em telas pequenas */
+  .toc-container {
+    display: none;
+  }
+
+  /* O cabeçalho do resumo agora quebra a linha para os botões */
+  .summary-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .summary-detail-actions {
+    flex-wrap: wrap; /* Permite que os botões quebrem a linha */
+    gap: 0.5rem;
+  }
+  
+  /* Permite que a barra de abas role horizontalmente se não couber na tela */
+  .tabs-nav {
+    overflow-x: auto;
+    padding-bottom: 10px; /* Espaço para a barra de rolagem não ficar colada */
+    white-space: nowrap; /* Impede que os botões das abas quebrem a linha */
+  }
+
+  /* --- MODAIS (Pop-ups) --- */
+
+  /* Faz os modais ocuparem mais da tela e garante a rolagem vertical */
+  .modal-content, .modal-content.large {
+    width: 95vw; /* 95% da largura da tela */
+    max-height: 85vh; /* 85% da altura da tela */
+    padding: 1.5rem 1rem;
+  }
+  .modal-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  /* --- AJUSTES DE FONTE E BOTÕES --- */
+
+  /* Reduz o tamanho das fontes de títulos para não serem tão grandes no celular */
+  h1, .summary-detail-title {
+    font-size: 1.8rem;
+  }
+  h2 {
+    font-size: 1.5rem;
+  }
+  h3 {
+    font-size: 1.2rem;
+  }
+  
+  /* Garante que os botões tenham um tamanho bom para o toque */
+  .btn {
+    padding: 0.6rem 1rem;
+  }
+}
