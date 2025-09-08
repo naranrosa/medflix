@@ -208,7 +208,19 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState('');
-    const [audioFile, setAudioFile] = useState(null);
+    const [audioFile, setAudioFile] = useState<File | null>(null);
+
+    // Função auxiliar para converter o áudio em base64
+    const fileToBase64 = async (file) => {
+        const arrayBuffer = await file.arrayBuffer();
+        let binary = '';
+        const bytes = new Uint8Array(arrayBuffer);
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+        }
+        return btoa(binary);
+    };
 
     const handleUpdate = async () => {
         if (!audioFile) {
@@ -217,38 +229,60 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
         }
         setIsLoading(true);
         setError('');
+
         try {
-            setLoadingMessage('Extraindo texto do áudio...');
-            const textFromAudio = `(Texto simulado extraído do áudio: Novas descobertas sobre o sistema nervoso periférico indicam uma maior plasticidade nos nervos cranianos, especialmente no nervo vago. Além disso, a barreira hematoencefálica pode ser temporariamente permeabilizada por ultrassom focado, permitindo a entrega de medicamentos.)`;
+            // 1) Transcrição real do áudio
+            setLoadingMessage('Transcrevendo o áudio...');
+            const base64Audio = await fileToBase64(audioFile);
 
-            setLoadingMessage('Comparando com o resumo atual...');
-            await new Promise(res => setTimeout(res, 1500));
+            const transcription = await ai.models.generateContent({
+                model: "gemini-2.5-flash", // modelo multimodal
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            { text: "Transcreva este áudio para texto em português médico-acadêmico:" },
+                            { inlineData: { mimeType: audioFile.type, data: base64Audio } }
+                        ]
+                    }
+                ]
+            });
 
-            const updatePrompt = `Você é um especialista em redação médica. Sua tarefa é atualizar um resumo existente com novas informações de uma aula recente. Integre as novas informações de forma coesa, melhore a estrutura e clareza, e evite redundâncias. Mantenha o formato HTML.
+            const textFromAudio = transcription.response?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            if (!textFromAudio) {
+                throw new Error("Falha na transcrição do áudio");
+            }
+
+            // 2) Atualização do resumo com IA
+            setLoadingMessage('Atualizando o resumo com as novas informações...');
+            const updatePrompt = `Você é um especialista em redação médica.
+            Sua tarefa é atualizar o resumo abaixo com as novas informações da aula,
+            integrando de forma coesa, melhorando clareza e mantendo formato HTML.
 
             Resumo Atual (HTML):
             \`\`\`html
             ${summary.content}
             \`\`\`
 
-            Novas Informações (extraídas do áudio da aula):
+            Novas informações extraídas do áudio:
             "${textFromAudio}"
 
-            Combine as duas fontes e forneça o resumo atualizado completo em HTML.`;
+            Forneça o resumo atualizado completo em HTML.`;
 
             const response = await ai.models.generateContent({
                 model: model,
                 contents: updatePrompt,
                 config: { responseMimeType: "application/json", responseSchema: enhancedContentSchema },
             });
+
             const parsedJson = JSON.parse(response.text.trim());
             setLoadingMessage('Resumo atualizado com sucesso!');
             await new Promise(res => setTimeout(res, 1000));
-            onUpdate(parsedJson.enhancedContent);
 
+            onUpdate(parsedJson.enhancedContent);
         } catch (e) {
             console.error(e);
-            setError('Falha ao atualizar o resumo. Verifique o áudio ou tente novamente.');
+            setError('Falha ao processar o áudio ou atualizar o resumo. Tente novamente.');
             setIsLoading(false);
         }
     };
@@ -259,15 +293,25 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
                 {!isLoading ? (
                     <>
                         <h2>Atualizar Resumo com IA</h2>
-                        <p>Faça o upload do áudio da aula mais recente. A IA irá analisar o conteúdo, compará-lo com o resumo atual e adicionar as informações que estão faltando.</p>
+                        <p>
+                            Faça o upload do áudio da aula mais recente. A IA irá transcrever, analisar e integrar
+                            as informações no resumo atual.
+                        </p>
                         <div className="form-group">
-                             <label>Áudio da Aula</label>
-                             <input className="input" type="file" accept="audio/*" onChange={(e) => setAudioFile(e.target.files[0])} />
+                            <label>Áudio da Aula</label>
+                            <input
+                                className="input"
+                                type="file"
+                                accept="audio/*"
+                                onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
+                            />
                         </div>
-                        {error && <p style={{color: 'var(--danger-accent)', marginTop: '1rem'}}>{error}</p>}
+                        {error && <p style={{ color: 'var(--danger-accent)', marginTop: '1rem' }}>{error}</p>}
                         <div className="modal-actions">
                             <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-                            <button className="btn btn-primary" onClick={handleUpdate} disabled={!audioFile}>Processar e Atualizar</button>
+                            <button className="btn btn-primary" onClick={handleUpdate} disabled={!audioFile}>
+                                Processar e Atualizar
+                            </button>
                         </div>
                     </>
                 ) : (
@@ -280,6 +324,7 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
         </div>
     );
 };
+
 
 
 const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
@@ -349,41 +394,76 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
 };
 
 const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, userProgress }) => {
+  // Estado para controlar se a barra lateral está aberta ou fechada
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
   const isSearching = searchQuery.trim() !== '';
 
+  const handleSelectAndClose = (subject) => {
+    onSelectSubject(subject);
+    setSidebarOpen(false); // Fecha a sidebar após a seleção
+  };
+
   return (
-    <div className="container dashboard">
-      <div className="dashboard-header">
-        <h1>{termName}</h1>
-        <div className="header-actions">
-            <ThemeToggle theme={theme} toggleTheme={toggleTheme}/>
-            {userProgress.streak > 0 && <div className="streak-display">🔥 {userProgress.streak}</div>}
-            <button className="btn btn-secondary" onClick={onLogout}>Sair</button>
+    <>
+      {/* A Sidebar agora vive aqui, mas só é visível quando 'isOpen' é true */}
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setSidebarOpen(false)} title={termName}>
+        {/* O conteúdo da sidebar é a própria grade de disciplinas */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+            {user.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
         </div>
-      </div>
+        <div className="subject-grid">
+          {subjects.map(subject => {
+            const subjectSummaries = searchResults.allSummaries.filter(s => s.subject_id === subject.id);
+            const completedCount = subjectSummaries.filter(s => userProgress.completedSummaries.includes(s.id)).length;
+            const progress = subjectSummaries.length > 0 ? (completedCount / subjectSummaries.length) * 100 : 0;
+            return (
+              <div key={subject.id} className="subject-card" style={{ backgroundColor: subject.color }} onClick={() => handleSelectAndClose(subject)}>
+                <div><h3>{subject.name}</h3></div>
+                <div className="subject-card-progress">
+                  <p>{completedCount} de {subjectSummaries.length} concluídos</p>
+                  <div className="progress-bar"><div className="progress-bar-inner" style={{ width: `${progress}%` }}></div></div>
+                </div>
+                {user.role === 'admin' && (
+                  <div className="card-actions">
+                    <IconButton onClick={(e) => onEditSubject(subject)}><EditIcon /></IconButton>
+                    <IconButton onClick={(e) => onDeleteSubject(subject.id)}><DeleteIcon /></IconButton>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Sidebar>
 
-      <div className="search-bar-container">
-          <SearchIcon />
-          <input
-            type="text"
-            placeholder="Buscar disciplinas ou resumos..."
-            className="search-input"
-            value={searchQuery}
-            onChange={onSearchChange}
-          />
-      </div>
+      <div className="container dashboard">
+        <div className="dashboard-header">
+          {/* O botão hamburger aparece aqui, mas só é visível no celular (via CSS) */}
+          <button className="hamburger-btn" onClick={() => setSidebarOpen(true)}>
+            <HamburgerIcon />
+          </button>
+          <h1>{isSearching ? "Resultados da Busca" : "Início"}</h1>
+          <div className="header-actions">
+              <ThemeToggle theme={theme} toggleTheme={toggleTheme}/>
+              {userProgress.streak > 0 && <div className="streak-display">🔥 {userProgress.streak}</div>}
+              <button className="btn btn-secondary" onClick={onLogout}>Sair</button>
+          </div>
+        </div>
 
-      {isSearching ? (
-        <div className="search-results">
-            <h2>Resultados da Busca</h2>
+        <div className="search-bar-container">
+            <SearchIcon />
+            <input type="text" placeholder="Buscar disciplinas ou resumos..." className="search-input" value={searchQuery} onChange={onSearchChange}/>
+        </div>
+
+        {isSearching ? (
+          <div className="search-results">
             {searchResults.subjects.length > 0 && <h3>Disciplinas</h3>}
             <div className="subject-grid">
-                 {searchResults.subjects.map(subject => (
-                    <div key={subject.id} className="subject-card" style={{ backgroundColor: subject.color }} onClick={() => onSelectSubject(subject)}>
-                        <h3>{subject.name}</h3>
-                        <p>{subject.summaryCount} resumos</p>
-                    </div>
-                ))}
+                {searchResults.subjects.map(subject => (
+                  <div key={subject.id} className="subject-card" style={{ backgroundColor: subject.color }} onClick={() => handleSelectAndClose(subject)}>
+                      <h3>{subject.name}</h3>
+                      <p>{subject.summaryCount} resumos</p>
+                  </div>
+              ))}
             </div>
             {searchResults.summaries.length > 0 && <h3>Resumos</h3>}
             <ul className="summary-list">
@@ -394,61 +474,57 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
                     </li>
                 ))}
             </ul>
-        </div>
-      ) : (
-        <>
-          {lastViewed.length > 0 && (
-            <div className="last-viewed-section">
-                <h2>Continue de Onde Parou</h2>
-                <div className="last-viewed-grid">
-                    {lastViewed.map(summary => (
-                        <div key={summary.id} className="last-viewed-card" onClick={() => onSelectSummary(summary)}>
-                            <h4>{summary.title}</h4>
-                            <p>{summary.subjectName}</p>
-                        </div>
-                    ))}
-                </div>
+          </div>
+        ) : (
+          <>
+            {lastViewed.length > 0 && (
+              <div className="last-viewed-section">
+                  <h2>Continue de Onde Parou</h2>
+                  <div className="last-viewed-grid">
+                      {lastViewed.map(summary => (
+                          <div key={summary.id} className="last-viewed-card" onClick={() => onSelectSummary(summary)}>
+                              <h4>{summary.title}</h4>
+                              <p>{summary.subjectName}</p>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+            )}
+
+            {/* O contêiner para o botão foi renomeado para ser alvo do CSS de ocultar */}
+            <div className="add-subject-button-container" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
+                {user.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
             </div>
-          )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
-              {/* Botão de adicionar só aparece para o admin */}
-              {user.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
-          </div>
-
-          <div className="subject-grid">
-            {subjects.map(subject => {
-              const subjectSummaries = searchResults.allSummaries.filter(s => s.subject_id === subject.id);
-              const completedCount = subjectSummaries.filter(s => userProgress.completedSummaries.includes(s.id)).length;
-              const progress = subjectSummaries.length > 0 ? (completedCount / subjectSummaries.length) * 100 : 0;
-              return (
-                <div key={subject.id} className="subject-card" style={{ backgroundColor: subject.color }} onClick={() => onSelectSubject(subject)}>
-                  <div>
-                    <h3>{subject.name}</h3>
-                  </div>
-                   <div className="subject-card-progress">
-                    <p>{completedCount} de {subjectSummaries.length} concluídos</p>
-                    <div className="progress-bar">
-                        <div className="progress-bar-inner" style={{ width: `${progress}%` }}></div>
+            {/* A grade de disciplinas original. Será OCULTA no celular pelo CSS. */}
+            <div className="subject-grid">
+              {subjects.map(subject => {
+                const subjectSummaries = searchResults.allSummaries.filter(s => s.subject_id === subject.id);
+                const completedCount = subjectSummaries.filter(s => userProgress.completedSummaries.includes(s.id)).length;
+                const progress = subjectSummaries.length > 0 ? (completedCount / subjectSummaries.length) * 100 : 0;
+                return (
+                  <div key={subject.id} className="subject-card" style={{ backgroundColor: subject.color }} onClick={() => onSelectSubject(subject)}>
+                    <div><h3>{subject.name}</h3></div>
+                    <div className="subject-card-progress">
+                      <p>{completedCount} de {subjectSummaries.length} concluídos</p>
+                      <div className="progress-bar"><div className="progress-bar-inner" style={{ width: `${progress}%` }}></div></div>
                     </div>
+                    {user.role === 'admin' && (
+                      <div className="card-actions">
+                        <IconButton onClick={(e) => onEditSubject(subject)}><EditIcon /></IconButton>
+                        <IconButton onClick={(e) => onDeleteSubject(subject.id)}><DeleteIcon /></IconButton>
+                      </div>
+                    )}
                   </div>
-                  {/* Ícones de editar/deletar só aparecem para o admin */}
-                  {user.role === 'admin' && (
-                    <div className="card-actions">
-                      <IconButton onClick={(e) => onEditSubject(subject)}><EditIcon /></IconButton>
-                      <IconButton onClick={(e) => onDeleteSubject(subject.id)}><DeleteIcon /></IconButton>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-    </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    </>
   );
 };
-
 const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user, terms }) => {
     const [name, setName] = useState('');
     const [selectedTermId, setSelectedTermId] = useState('');
@@ -891,6 +967,31 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                 </div>
             </div>
         </div>
+    );
+};
+
+const HamburgerIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+);
+
+const Sidebar = ({ isOpen, onClose, title, children }) => {
+    return (
+        <>
+            <div className={`sidebar-overlay ${isOpen ? 'open' : ''}`} onClick={onClose}></div>
+            <div className={`sidebar ${isOpen ? 'open' : ''}`}>
+                <div className="sidebar-header">
+                    <h3>{title}</h3>
+                    <button className="close-btn" onClick={onClose}>&times;</button>
+                </div>
+                <div className="sidebar-content">
+                    {children}
+                </div>
+            </div>
+        </>
     );
 };
 
