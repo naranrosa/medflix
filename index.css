@@ -47,7 +47,7 @@ html, body {
   width: 100%;
   align-items: center;
   justify-content: flex-start;
-  padding-top: 0; 
+  padding-top: 0;
 }
 
 .container {
@@ -1333,7 +1333,7 @@ body.light-mode .login-card .select-input:focus {
   }
 
   /* --- TELA DE DETALHES DO RESUMO (IMPORTANTE!) --- */
-  
+
   .summary-detail-layout {
     grid-template-columns: 1fr; /* Remove a coluna lateral */
   }
@@ -1353,7 +1353,7 @@ body.light-mode .login-card .select-input:focus {
     flex-wrap: wrap; /* Permite que os botões quebrem a linha */
     gap: 0.5rem;
   }
-  
+
   /* Permite que a barra de abas role horizontalmente se não couber na tela */
   .tabs-nav {
     overflow-x: auto;
@@ -1387,7 +1387,7 @@ body.light-mode .login-card .select-input:focus {
   h3 {
     font-size: 1.2rem;
   }
-  
+
   /* Garante que os botões tenham um tamanho bom para o toque */
   .btn {
     padding: 0.6rem 1rem;
@@ -1417,7 +1417,7 @@ body.light-mode .login-card .select-input:focus {
 .summary-content {
   /* Garante que o conteúdo respeite a largura máxima antes de forçar a rolagem */
   max-width: 100%;
-  
+
   /* Força a quebra de palavras/URLs muito longas para que não estourem o layout */
   overflow-wrap: break-word;
   word-wrap: break-word; /* Suporte para navegadores mais antigos */
@@ -1444,4 +1444,105 @@ body.light-mode .login-card .select-input:focus {
   padding: 1rem;
   border-radius: 8px;
   white-space: pre; /* Mantém a formatação do código */
+}
+/* ==========================================================================
+   ESTILOS DA BARRA LATERAL (SIDEBAR) RESPONSIVA
+   ========================================================================== */
+
+/* --- O Botão "Hamburger" --- */
+.hamburger-btn {
+  display: none; /* Escondido por padrão no desktop */
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  cursor: pointer;
+  z-index: 1001; /* Fica acima de outros elementos do header */
+}
+.hamburger-btn svg {
+  stroke: var(--text-color);
+}
+
+/* --- A Sobreposição (Overlay) --- */
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1002;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+}
+.sidebar-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* --- A Barra Lateral (Sidebar) --- */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 300px; /* Largura da barra lateral */
+  max-width: 85%;
+  background-color: var(--card-bg);
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 1003;
+  transform: translateX(-100%); /* Começa escondida fora da tela */
+  transition: transform 0.3s ease-in-out;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar.open {
+  transform: translateX(0); /* Move para dentro da tela quando aberta */
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.sidebar-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.sidebar-header .close-btn {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  font-weight: 300;
+  color: var(--text-color);
+  cursor: pointer;
+  padding: 0 0.5rem;
+}
+
+.sidebar-content {
+  flex-grow: 1;
+  overflow-y: auto; /* Permite rolar o conteúdo da sidebar se for muito grande */
+  padding: 1rem;
+}
+
+/* ==========================================================================
+   REGRAS DE RESPONSIVIDADE PARA ATIVAR A SIDEBAR NO CELULAR
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  /* Mostra o botão hamburger no celular */
+  .hamburger-btn {
+    display: block;
+  }
+
+  /*
+    Esconde a grade de disciplinas e o botão "Adicionar Disciplina"
+    da visualização principal no celular, pois eles agora estarão DENTRO da sidebar.
+  */
+  .dashboard .subject-grid,
+  .dashboard .add-subject-button-container {
+    display: none;
+  }
 }
