@@ -79,7 +79,7 @@ const quizExplanationSchema = {
 const QuizQuestion = ({ question }) => {
   const [selected, setSelected] = useState<number | null>(null);
 
-  const handleAnswer = (index) => {
+  const handleAnswer = (index: number) => {
     if (selected === null) {
       setSelected(index);
     }
@@ -118,12 +118,16 @@ const QuizQuestion = ({ question }) => {
           {selected === question.correctAlternativeIndex ? (
             <p className="correct">✅ Você acertou!</p>
           ) : (
-            <p className="incorrect">❌ Você errou.
-              <br />A resposta correta é: <strong>
-                {question.alternatives[question.correctAlternativeIndex]}
-              </strong>
-            </p>
+            <>
+              <p className="incorrect">❌ Você errou.</p>
+              <p>
+                A resposta correta é:{" "}
+                <strong>{question.alternatives[question.correctAlternativeIndex]}</strong>
+              </p>
+            </>
           )}
+
+          {/* Sempre exibe a explicação */}
           <p><strong>Comentário:</strong> {question.explanation}</p>
         </div>
       )}
