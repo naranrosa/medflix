@@ -1531,19 +1531,31 @@ body.light-mode .login-card .select-input:focus {
    REGRAS DE RESPONSIVIDADE PARA ATIVAR A SIDEBAR NO CELULAR
    ========================================================================== */
 
+/* --- CÓDIGO CORRETO E COMPLETO PARA A TELA DO CELULAR --- */
+
+/* Media Query para telas de celular e tablets (até 768px de largura) */
 @media (max-width: 768px) {
-  /* Mostra o botão hamburger no celular */
-  .hamburger-btn {
-    display: block;
+
+  /* 1. Transforma a grade em uma única coluna para que as matérias apareçam */
+  .subject-grid {
+    grid-template-columns: 1fr; /* Apenas uma coluna */
   }
 
-  /*
-    Esconde a grade de disciplinas e o botão "Adicionar Disciplina"
-    da visualização principal no celular, pois eles agora estarão DENTRO da sidebar.
-  */
-  .dashboard .subject-grid,
-  .dashboard .add-subject-button-container {
-    display: none;
+  /* 2. Ajusta o cabeçalho para telas pequenas */
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .dashboard-header .header-actions {
+    width: 100%;
+    justify-content: flex-end; /* Alinha os botões à direita */
+  }
+
+  /* 3. Centraliza o botão "Adicionar Disciplina" */
+  .add-subject-button-container {
+    justify-content: center;
   }
 }
 
@@ -1596,4 +1608,107 @@ body.light-mode .login-card .select-input:focus {
 .icon-btn:hover {
   background-color: var(--background-modifier-hover);
   color: var(--text-primary);
+}
+
+/* Lista de alternativas */
+.quiz-question ul {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.quiz-question li {
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+/* Hover antes de escolher */
+.quiz-question li:hover {
+  background: var(--hover-color, #f5f5f5);
+  transform: scale(1.02);
+}
+
+/* Alternativa selecionada pelo usuário */
+.quiz-question li.selected {
+  border: 2px solid #007bff;
+  background: #eaf2ff;
+}
+
+/* Resposta correta */
+.quiz-question li.correct {
+  border: 2px solid #28a745;
+  background: #e6f9ec;
+  color: #155724;
+  font-weight: bold;
+}
+
+/* Resposta incorreta */
+.quiz-question li.incorrect {
+  border: 2px solid #dc3545;
+  background: #fdeaea;
+  color: #721c24;
+  font-weight: bold;
+}
+
+/* Feedback abaixo da questão */
+.feedback {
+  margin-top: 1rem;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+.feedback .correct {
+  color: #28a745;
+  font-weight: bold;
+}
+
+.feedback .incorrect {
+  color: #dc3545;
+  font-weight: bold;
+}
+.hidden {
+  display: none;
+}
+
+/* --- ESTILO BASE PARA A GRADE DE DISCIPLINAS --- */
+/* (Você provavelmente já tem isso, mas garanta que exista) */
+.subject-grid {
+  display: grid;
+  /* Define 3 colunas para telas maiores */
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+
+/* --- CSS PARA TORNAR A PÁGINA RESPONSIVA --- */
+
+/* Media Query para telas de celular e tablets (até 768px de largura) */
+@media (max-width: 768px) {
+
+  /* 1. Transforma a grade em uma única coluna */
+  .subject-grid {
+    grid-template-columns: 1fr; /* Apenas uma coluna */
+  }
+
+  /* 2. Ajusta o cabeçalho para telas pequenas */
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .dashboard-header .header-actions {
+    width: 100%;
+    justify-content: flex-end; /* Alinha os botões à direita */
+  }
+
+  /* 3. Centraliza o botão "Adicionar Disciplina" */
+  .add-subject-button-container {
+    justify-content: center;
+  }
 }
