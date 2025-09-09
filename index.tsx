@@ -76,6 +76,26 @@ const quizExplanationSchema = {
     required: ['explanation']
 };
 
+// NOVO: Schema para geração de Flashcards
+const flashcardsSchema = {
+  type: Type.OBJECT,
+  properties: {
+    flashcards: {
+      type: Type.ARRAY,
+      description: 'Uma lista de flashcards com frente e verso.',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          front: { type: Type.STRING, description: 'O texto da frente do flashcard (pergunta/conceito).' },
+          back: { type: Type.STRING, description: 'O texto do verso do flashcard (resposta/explicação).' }
+        },
+        required: ['front', 'back']
+      }
+    }
+  },
+  required: ['flashcards']
+};
+
 const QuizQuestion = ({ question }) => {
   const [selected, setSelected] = useState<number | null>(null);
 
@@ -143,27 +163,22 @@ const getNewSubjectColor = (existingSubjects) => {
     return availableColor || subjectColors[Math.floor(Math.random() * subjectColors.length)];
 };
 
-const getGoogleDriveEmbedUrl = (url) => {
-    if (!url) return null;
-    const regExp = /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/;
-    const match = url.match(regExp);
-    return (match && match[1]) ? `https://drive.google.com/file/d/${match[1]}/preview` : null;
+const getGoogleDriveEmbedUrl = (url: string) => {
+  if (!url) return null;
+  const regExp = /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/;
+  const match = url.match(regExp);
+  return (match && match[1])
+    ? `https://drive.google.com/file/d/${match[1]}/preview`
+    : null;
 };
 
-const getSpotifyEmbedUrl = (url) => {
-    if (!url) return null;
-    const match = url.match(/open\.spotify\.com\/(track|episode)\/([a-zA-Z0-9]+)/);
-    if (match && match[1] && match[2]) {
-        return `https://open.spotify.com/embed/${match[1]}/${match[2]}`;
-    }
-    return null;
-};
+
 
 // --- COMPONENTES ---
 
 const ThemeToggle = ({ theme, toggleTheme }) => (
     <div className="theme-switch">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+        <svg xmlns="http://www.w.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
         <label className="theme-switch-wrapper">
             <input type="checkbox" checked={theme === 'dark'} onChange={toggleTheme} />
             <span className="slider"></span>
@@ -183,8 +198,7 @@ const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" heig
 const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
 const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
 const SparklesIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L14.39 8.36L21 9.27L16.36 14.14L18.18 21L12 17.27L5.82 21L7.64 14.14L3 9.27L9.61 8.36L12 2z"/></svg>;
-// NOVO: Ícone para o botão de exibir/ocultar o sumário
-const ListIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
+const ListIcon = () => <svg xmlns="http://www.w.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
 
 
 const Breadcrumbs = ({ paths }) => (
@@ -220,7 +234,7 @@ const LoginScreen = ({ theme, toggleTheme }) => {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
 
-    } catch (error) { // <-- CORREÇÃO: Removido o "=>" daqui
+    } catch (error) {
       setError("Email ou senha inválidos. Tente novamente.");
     } finally {
       setLoading(false);
@@ -274,10 +288,8 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
     const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState('');
     const [audioFile, setAudioFile] = useState(null);
-    // NOVO: Estado para armazenar o texto do usuário
     const [textContent, setTextContent] = useState('');
 
-    // Função auxiliar para converter o áudio em base64 (mantida)
     const fileToBase64 = async (file) => {
         const arrayBuffer = await file.arrayBuffer();
         let binary = '';
@@ -290,8 +302,6 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
     };
 
     const handleUpdate = async () => {
-        // --- LÓGICA ATUALIZADA ---
-        // Validação: Garante que pelo menos um dos dois (áudio ou texto) foi fornecido.
         if (!audioFile && !textContent.trim()) {
             setError('Por favor, selecione um arquivo de áudio ou cole o texto com as novas informações.');
             return;
@@ -301,7 +311,6 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
 
         try {
             let textFromAudio = '';
-            // 1) Transcrição do áudio (se existir)
             if (audioFile) {
                 setLoadingMessage('Transcrevendo o áudio...');
                 const base64Audio = await fileToBase64(audioFile);
@@ -325,13 +334,11 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
                 }
             }
 
-            // 2) Combina as informações do áudio e do texto
             const newInformation = `
                 ${textFromAudio ? `Informações do áudio transcrito:\n"""${textFromAudio}"""\n\n` : ''}
                 ${textContent.trim() ? `Informações do texto fornecido:\n"""${textContent.trim()}"""` : ''}
             `.trim();
 
-            // 3) Atualização do resumo com IA
             setLoadingMessage('Atualizando o resumo com as novas informações...');
             const updatePrompt = `Você é um especialista em redação médica.
             Sua tarefa é atualizar o resumo abaixo com as novas informações da aula,
@@ -376,7 +383,6 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
                             as informações no resumo atual.
                         </p>
 
-                        {/* Campo de Upload de Áudio (mantido) */}
                         <div className="form-group">
                             <label>Opção 1: Áudio da Aula</label>
                             <input
@@ -387,21 +393,19 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
                             />
                         </div>
 
-                        {/* NOVO: Campo de Texto */}
                         <div className="form-group">
                              <label>Opção 2: Novas Informações (Texto)</label>
                              <textarea
                                 placeholder="Cole aqui o texto ou anotações a serem adicionadas ao resumo..."
                                 value={textContent}
                                 onChange={(e) => setTextContent(e.target.value)}
-                                rows={8} // Altura inicial do campo de texto
+                                rows={8}
                             />
                         </div>
 
                         {error && <p style={{ color: 'var(--danger-accent)', marginTop: '1rem' }}>{error}</p>}
                         <div className="modal-actions">
                             <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-                            {/* Lógica do botão atualizada */}
                             <button className="btn btn-primary" onClick={handleUpdate} disabled={!audioFile && !textContent.trim()}>
                                 Processar e Atualizar
                             </button>
@@ -484,6 +488,50 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
     );
 };
 
+// NOVO: Modal para gerar Flashcards
+const AIGenerateFlashcardsModal = ({ onClose, onGenerate, isGenerating }) => {
+    const [quantity, setQuantity] = useState(10); // Default quantity
+
+    const handleGenerateClick = () => {
+        onGenerate(quantity);
+    };
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                {!isGenerating ? (
+                    <>
+                        <h2>Gerar Flashcards com IA</h2>
+                        <p>Escolha quantos flashcards você deseja criar a partir do conteúdo deste resumo.</p>
+                        <div className="form-group">
+                            <label htmlFor="quantity-input">Quantidade de Flashcards</label>
+                            <input
+                                id="quantity-input"
+                                className="input"
+                                type="number"
+                                value={quantity}
+                                onChange={(e) => setQuantity(parseInt(e.target.value, 10))}
+                                min="1"
+                                max="20"
+                            />
+                        </div>
+                        <div className="modal-actions">
+                            <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+                            <button className="btn btn-primary" onClick={handleGenerateClick}>Gerar</button>
+                        </div>
+                    </>
+                ) : (
+                    <div className="loader-container">
+                        <div className="loader"></div>
+                        <p>Gerando flashcards, isso pode levar um momento...</p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+
 const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, userProgress }) => {
   const isSearching = searchQuery.trim() !== '';
 
@@ -544,7 +592,6 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
               {user.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
           </div>
 
-          {/* A grade de disciplinas agora será sempre visível e o CSS cuidará da responsividade */}
           <div className="subject-grid">
             {subjects.map(subject => {
               const subjectSummaries = searchResults.allSummaries.filter(s => s.subject_id === subject.id);
@@ -588,17 +635,12 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
     const handleSubmit = (e) => {
         e.preventDefault();
 
-        // --- ESTA É A VALIDAÇÃO QUE ESTAVA FALTANDO ---
-        // Se o usuário for admin e não tiver selecionado um período, mostre um alerta e pare.
         if (user?.role === 'admin' && !selectedTermId) {
             alert('Por favor, selecione um período para esta disciplina.');
-            return; // Impede o envio do formulário
+            return;
         }
-        // -------------------------------------------------
 
         const finalColor = (subject && subject.color) ? subject.color : getNewSubjectColor(existingSubjects);
-
-        // Usa o term_id do estado do modal (para admins) ou o do perfil do usuário (para estudantes)
         const termIdToSave = user?.role === 'admin' ? selectedTermId : user?.term_id;
 
         onSave({ ...subject, name, color: finalColor, term_id: termIdToSave });
@@ -622,7 +664,7 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
                                 className="select-input"
                                 value={selectedTermId}
                                 onChange={(e) => setSelectedTermId(e.target.value)}
-                                required // O 'required' aqui ajuda, mas a validação no JS é mais segura
+                                required
                             >
                                 <option value="" disabled>Selecione um período...</option>
                                 {terms.map(term => (
@@ -872,6 +914,113 @@ const QuizView = ({ questions, onGetExplanation }) => {
     );
 };
 
+// NOVO: Componente para Flashcards
+// NOVO: Componente para Flashcards (VERSÃO CORRIGIDA)
+const FlashcardView = ({ flashcards }) => {
+    const [deck, setDeck] = useState([]);
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const [isFlipped, setIsFlipped] = useState(false);
+    const [isFinished, setIsFinished] = useState(false);
+
+    useEffect(() => {
+        setDeck(flashcards.map(f => ({...f, id: Math.random()})).sort(() => Math.random() - 0.5));
+        setCurrentIndex(0);
+        setIsFlipped(false);
+        setIsFinished(false);
+    }, [flashcards]);
+
+    const handleFlip = () => setIsFlipped(prev => !prev);
+
+    const processAnswer = (knows) => {
+        // Animação para virar para a frente antes de trocar de card
+        setIsFlipped(false);
+
+        // Espera a animação de virar terminar
+        setTimeout(() => {
+            if (knows) {
+                const newDeck = deck.filter((_, index) => index !== currentIndex);
+                if (newDeck.length === 0) {
+                    setIsFinished(true);
+                } else {
+                    setDeck(newDeck);
+                    setCurrentIndex(currentIndex % newDeck.length);
+                }
+            } else {
+                // Se não sabe, move o card para o final da fila
+                const currentCard = deck[currentIndex];
+                const remainingDeck = deck.filter((_, index) => index !== currentIndex);
+                const newDeck = [...remainingDeck, currentCard];
+                setDeck(newDeck);
+                // Permanece no mesmo índice, que agora terá um novo card
+                if (deck.length > 1) {
+                    setCurrentIndex(currentIndex % (deck.length -1));
+                }
+            }
+        }, 600); // Duração da animação CSS
+    };
+
+    const handleAnswer = (knows) => {
+        if (!isFlipped) {
+            // Se o card está na frente, primeiro vira para a resposta
+            setIsFlipped(true);
+            // Depois de ver a resposta, processa a ação
+            setTimeout(() => processAnswer(knows), 1500); // Dá 1.5s para ler a resposta
+        } else {
+            // Se já está virado, apenas processa a ação
+            processAnswer(knows);
+        }
+    };
+
+    const handleReset = () => {
+        setDeck(flashcards.map(f => ({...f, id: Math.random()})).sort(() => Math.random() - 0.5));
+        setCurrentIndex(0);
+        setIsFlipped(false);
+        setIsFinished(false);
+    };
+
+    if (isFinished) {
+        return (
+            <div className="flashcard-container finished-deck">
+                <h2>Parabéns!</h2>
+                <p>Você revisou todos os flashcards.</p>
+                <button className="btn btn-primary" onClick={handleReset}>Estudar Novamente</button>
+            </div>
+        );
+    }
+
+    if (!deck || deck.length === 0) {
+        return <div className="flashcard-container"><p>Nenhum flashcard para exibir.</p></div>;
+    }
+
+    const currentCard = deck[currentIndex];
+
+    return (
+        <div className="flashcard-container">
+            <div className="flashcard-progress">
+                <span>{deck.length} restantes</span>
+            </div>
+
+            {/* O card principal que vira */}
+            <div className={`flashcard ${isFlipped ? 'is-flipped' : ''}`} onClick={handleFlip}>
+                <div className="flashcard-inner">
+                    <div className="flashcard-front">
+                        <p>{currentCard.front}</p>
+                    </div>
+                    <div className="flashcard-back">
+                        <p>{currentCard.back}</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Botões de ação sempre visíveis */}
+            <div className="flashcard-actions">
+                <button className="btn btn-action-dont-know" onClick={() => handleAnswer(false)}>Não Lembro</button>
+                <button className="btn btn-action-know" onClick={() => handleAnswer(true)}>Já Domino</button>
+            </div>
+        </div>
+    );
+};
+
 const TableOfContents = ({ content }) => {
     const [headings, setHeadings] = useState([]);
 
@@ -880,12 +1029,13 @@ const TableOfContents = ({ content }) => {
         if (!summaryContentElement) return;
 
         const newHeadings = [];
-        summaryContentElement.querySelectorAll('h2, h3').forEach(h => {
+        summaryContentElement.querySelectorAll('h2, h3').forEach((h, index) => { // Adicione 'index' aqui
             const text = h.textContent;
-            const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+            // Adicione o 'index' ao final do id para garantir que seja único
+            const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + `-${index}`;
             h.id = id;
             newHeadings.push({
-                id,
+                id, // Agora a 'key' será sempre única
                 text,
                 level: h.tagName.toLowerCase() === 'h2' ? 1 : 2
             });
@@ -932,28 +1082,15 @@ const GoogleDrivePlayer = ({ url }) => {
     );
 };
 
-const SpotifyPlayer = ({ url }) => {
-    const embedUrl = getSpotifyEmbedUrl(url);
-    if (!embedUrl) return <p>Link do Spotify inválido ou não suportado.</p>;
-    return (
-        <div className="spotify-player-container">
-            <iframe src={`${embedUrl}?utm_source=generator`} frameBorder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title="Player do Spotify"></iframe>
-        </div>
-    );
-};
-
-
-// MODIFICADO: Este é o componente com a nova funcionalidade
-// MODIFICADO: Este é o componente com a nova funcionalidade
-const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate }) => {
+// MODIFICADO: Este é o componente com a nova funcionalidade de Flashcards
+const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate, onGenerateFlashcards }) => {
     const [activeTab, setActiveTab] = useState('summary');
     const [isGenerating, setIsGenerating] = useState(false);
-    // 1. Adicionado estado para controlar a visibilidade do sumário (Table of Contents)
     const [isTocVisible, setIsTocVisible] = useState(true);
+    const [isFlashcardModalOpen, setFlashcardModalOpen] = useState(false);
 
     useEffect(() => {
         setActiveTab('summary');
-        // Reseta a visibilidade do sumário sempre que um novo resumo for carregado
         setIsTocVisible(true);
     }, [summary]);
 
@@ -963,20 +1100,25 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
         setIsGenerating(false);
     };
 
+    const handleGenerateFlashcards = async (quantity) => {
+        setIsGenerating(true);
+        await onGenerateFlashcards(quantity);
+        setIsGenerating(false);
+        setFlashcardModalOpen(false); // Fecha o modal após a geração
+    }
+
     const availableTabs = [
         { id: 'summary', label: 'Resumo', condition: true },
         { id: 'video', label: 'Vídeo', condition: !!summary.video },
-        { id: 'podcast', label: 'Podcast', condition: !!summary.audio },
+        { id: 'flashcards', label: 'Flashcards', condition: (summary.flashcards && summary.flashcards.length > 0) || user.role === 'admin' },
         { id: 'questions', label: 'Questões', condition: (summary.questions && summary.questions.length > 0) || user.role === 'admin' }
     ].filter(tab => tab.condition);
 
     return (
         <div className="summary-detail-layout">
-            {/* 4. A renderização do sumário agora depende do estado 'isTocVisible' */}
             {activeTab === 'summary' && isTocVisible && <TableOfContents content={summary.content} />}
             <div className="summary-detail-view">
                 <div className="summary-header">
-                    {/* 2. Adicionado o botão para controlar a visibilidade. Ele só aparece na aba 'Resumo' */}
                     {activeTab === 'summary' && (
                         <IconButton onClick={() => setIsTocVisible(!isTocVisible)} className="toc-toggle-btn">
                             <ListIcon />
@@ -1012,7 +1154,6 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                     ))}
                 </nav>
 
-                {/* --- ABA AGORA USA CSS PARA ESCONDER, NÃO DESMONTA --- */}
                 <div className="tab-content">
                     <div
                         id="tab-panel-summary"
@@ -1030,11 +1171,26 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                     </div>
 
                     <div
-                        id="tab-panel-podcast"
+                        id="tab-panel-flashcards"
                         role="tabpanel"
-                        className={activeTab === 'podcast' ? '' : 'hidden'}
+                        className={activeTab === 'flashcards' ? '' : 'hidden'}
                     >
-                        {summary.audio && <SpotifyPlayer url={summary.audio} />}
+                        {summary.flashcards && summary.flashcards.length > 0 ? (
+                            <FlashcardView flashcards={summary.flashcards} />
+                        ) : (
+                            user.role === 'admin' && (
+                                <div className="quiz-container empty-quiz">
+                                    <p>Ainda não há flashcards para este resumo.</p>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={() => setFlashcardModalOpen(true)}
+                                        disabled={isGenerating}
+                                    >
+                                        {isGenerating ? 'Gerando...' : 'Gerar Flashcards com IA'}
+                                    </button>
+                                </div>
+                            )
+                        )}
                     </div>
 
                     <div
@@ -1061,6 +1217,13 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                     </div>
                 </div>
             </div>
+             {isFlashcardModalOpen && (
+                <AIGenerateFlashcardsModal
+                    onClose={() => setFlashcardModalOpen(false)}
+                    onGenerate={handleGenerateFlashcards}
+                    isGenerating={isGenerating}
+                />
+            )}
         </div>
     );
 };
@@ -1090,7 +1253,6 @@ const Sidebar = ({ isOpen, onClose, title, children }) => {
     );
 };
 
-// Componente para o usuário escolher seu termo inicial
 const TermSelector = ({ user, terms, onTermUpdate }) => {
     const [selectedTerm, setSelectedTerm] = useState('');
     const [loading, setLoading] = useState(false);
@@ -1198,7 +1360,13 @@ const App = () => {
             setSubjects(subjectsData || []);
 
             const { data: summariesData } = await supabase.from('summaries').select('*');
-            setSummaries(summariesData || []);
+            setSummaries(
+              (summariesData || []).map(s => ({
+                ...s,
+                questions: typeof s.questions === 'string' ? JSON.parse(s.questions) : s.questions,
+                flashcards: typeof s.flashcards === 'string' ? JSON.parse(s.flashcards) : s.flashcards,
+              }))
+            );
         } else {
             setSubjects([]);
             setSummaries([]);
@@ -1306,7 +1474,7 @@ const App = () => {
   const handleSaveSummary = async (summaryData) => {
     const summaryPayload = { title: summaryData.title, content: summaryData.content, audio: summaryData.audio, video: summaryData.video, subject_id: summaryData.subject_id, user_id: session.user.id };
     if (summaryData.id) {
-        const { data, error } = await supabase.from('summaries').update(summaryPayload).eq('id', summaryData.id).select();
+    const { data, error } = await supabase.from('summaries') .update({ content: String(newContent) }) .eq('id', summaryId) .select();
         if (error) alert(error.message);
         else if (data) setSummaries(summaries.map(s => s.id === data[0].id ? data[0] : s));
     } else {
@@ -1340,15 +1508,36 @@ const App = () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
     try {
-        const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere um quiz com um enunciado com caso clinico, não podendo citar o resumo diretamente, mas abordar somente a materia do resumo. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
+        const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere um quiz. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
         const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json", responseSchema: quizSchema } });
         const parsedJson = JSON.parse(response.text.trim());
-        const { error } = await supabase.from('summaries').update({ questions: parsedJson.questions }).eq('id', currentSummaryId);
+        const { error } = await supabase.from('summaries') .update({ questions: JSON.stringify(parsedJson.questions) }) .eq('id', currentSummaryId);
         if (error) throw error;
         setSummaries(summaries.map(s => s.id === currentSummaryId ? { ...s, questions: parsedJson.questions } : s));
     } catch (e) {
         console.error("Erro ao gerar/salvar quiz:", e);
         alert("Falha ao gerar o quiz. Tente novamente.");
+    }
+  };
+
+  // NOVA FUNÇÃO: Para gerar Flashcards
+  const handleGenerateFlashcards = async (quantity) => {
+    const summary = summaries.find(s => s.id === currentSummaryId);
+    if (!summary) return;
+    try {
+        const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere exatamente ${quantity} flashcards (com frente e verso) para estudo. A frente deve ser um conceito ou pergunta, e o verso a resposta ou explicação. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
+        const response = await ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: { responseMimeType: "application/json", responseSchema: flashcardsSchema }
+        });
+        const parsedJson = JSON.parse(response.text.trim());
+        const { data, error } = await supabase.from('summaries') .update({ flashcards: JSON.stringify(parsedJson.flashcards) }) .eq('id', currentSummaryId) .select();
+        if (error) throw error;
+        setSummaries(summaries.map(s => s.id === currentSummaryId ? { ...s, flashcards: data[0].flashcards } : s));
+    } catch (e) {
+        console.error("Erro ao gerar/salvar flashcards:", e);
+        alert("Falha ao gerar os flashcards. Tente novamente.");
     }
   };
 
@@ -1413,7 +1602,7 @@ const App = () => {
       case 'subject':
         return <SummaryListView subject={currentSubject} summaries={summariesForCurrentSubject} onSelectSummary={handleSelectSummary} onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }} onEditSummary={(summary) => { setEditingSummary(summary); setSummaryModalOpen(true); }} onDeleteSummary={handleDeleteSummary} user={user} userProgress={userProgress} onAIEnhance={() => setAIEnhanceModalOpen(true)} />;
       case 'summary':
-        return <SummaryDetailView summary={currentSummary} onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }} onDelete={() => handleDeleteSummary(currentSummary.id)} onGenerateQuiz={handleGenerateQuiz} onToggleComplete={handleToggleComplete} isCompleted={userProgress.completedSummaries.includes(currentSummary.id)} onGetExplanation={handleGetExplanation} user={user} onAIUpdate={() => setAIUpdateModalOpen(true)} />;
+        return <SummaryDetailView summary={currentSummary} onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }} onDelete={() => handleDeleteSummary(currentSummary.id)} onGenerateQuiz={handleGenerateQuiz} onToggleComplete={handleToggleComplete} isCompleted={userProgress.completedSummaries.includes(currentSummary.id)} onGetExplanation={handleGetExplanation} user={user} onAIUpdate={() => setAIUpdateModalOpen(true)} onGenerateFlashcards={handleGenerateFlashcards} />;
       default:
         return <LoginScreen theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />;
     }
