@@ -178,7 +178,7 @@ const getGoogleDriveEmbedUrl = (url: string) => {
 
 const ThemeToggle = ({ theme, toggleTheme }) => (
     <div className="theme-switch">
-        <svg xmlns="http://www.w.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
         <label className="theme-switch-wrapper">
             <input type="checkbox" checked={theme === 'dark'} onChange={toggleTheme} />
             <span className="slider"></span>
@@ -198,7 +198,7 @@ const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" heig
 const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
 const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
 const SparklesIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L14.39 8.36L21 9.27L16.36 14.14L18.18 21L12 17.27L5.82 21L7.64 14.14L3 9.27L9.61 8.36L12 2z"/></svg>;
-const ListIcon = () => <svg xmlns="http://www.w.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
+const ListIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
 
 
 const Breadcrumbs = ({ paths }) => (
@@ -914,8 +914,8 @@ const QuizView = ({ questions, onGetExplanation }) => {
     );
 };
 
-// NOVO: Componente para Flashcards
-// NOVO: Componente para Flashcards (VERSÃO CORRIGIDA)
+// --- CORREÇÃO APLICADA AQUI ---
+// O componente agora verifica se `flashcards` é um array antes de usá-lo.
 const FlashcardView = ({ flashcards }) => {
     const [deck, setDeck] = useState([]);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -923,7 +923,9 @@ const FlashcardView = ({ flashcards }) => {
     const [isFinished, setIsFinished] = useState(false);
 
     useEffect(() => {
-        setDeck(flashcards.map(f => ({...f, id: Math.random()})).sort(() => Math.random() - 0.5));
+        // Garante que `flashcards` seja um array antes de chamar .map
+        const safeFlashcards = Array.isArray(flashcards) ? flashcards : [];
+        setDeck(safeFlashcards.map(f => ({...f, id: Math.random()})).sort(() => Math.random() - 0.5));
         setCurrentIndex(0);
         setIsFlipped(false);
         setIsFinished(false);
@@ -932,10 +934,8 @@ const FlashcardView = ({ flashcards }) => {
     const handleFlip = () => setIsFlipped(prev => !prev);
 
     const processAnswer = (knows) => {
-        // Animação para virar para a frente antes de trocar de card
         setIsFlipped(false);
 
-        // Espera a animação de virar terminar
         setTimeout(() => {
             if (knows) {
                 const newDeck = deck.filter((_, index) => index !== currentIndex);
@@ -946,33 +946,29 @@ const FlashcardView = ({ flashcards }) => {
                     setCurrentIndex(currentIndex % newDeck.length);
                 }
             } else {
-                // Se não sabe, move o card para o final da fila
                 const currentCard = deck[currentIndex];
                 const remainingDeck = deck.filter((_, index) => index !== currentIndex);
                 const newDeck = [...remainingDeck, currentCard];
                 setDeck(newDeck);
-                // Permanece no mesmo índice, que agora terá um novo card
                 if (deck.length > 1) {
                     setCurrentIndex(currentIndex % (deck.length -1));
                 }
             }
-        }, 600); // Duração da animação CSS
+        }, 600);
     };
 
     const handleAnswer = (knows) => {
         if (!isFlipped) {
-            // Se o card está na frente, primeiro vira para a resposta
             setIsFlipped(true);
-            // Depois de ver a resposta, processa a ação
-            setTimeout(() => processAnswer(knows), 1500); // Dá 1.5s para ler a resposta
+            setTimeout(() => processAnswer(knows), 1500);
         } else {
-            // Se já está virado, apenas processa a ação
             processAnswer(knows);
         }
     };
 
     const handleReset = () => {
-        setDeck(flashcards.map(f => ({...f, id: Math.random()})).sort(() => Math.random() - 0.5));
+        const safeFlashcards = Array.isArray(flashcards) ? flashcards : [];
+        setDeck(safeFlashcards.map(f => ({...f, id: Math.random()})).sort(() => Math.random() - 0.5));
         setCurrentIndex(0);
         setIsFlipped(false);
         setIsFinished(false);
@@ -987,7 +983,8 @@ const FlashcardView = ({ flashcards }) => {
             </div>
         );
     }
-
+    
+    // Mostra mensagem se não houver flashcards
     if (!deck || deck.length === 0) {
         return <div className="flashcard-container"><p>Nenhum flashcard para exibir.</p></div>;
     }
@@ -999,8 +996,6 @@ const FlashcardView = ({ flashcards }) => {
             <div className="flashcard-progress">
                 <span>{deck.length} restantes</span>
             </div>
-
-            {/* O card principal que vira */}
             <div className={`flashcard ${isFlipped ? 'is-flipped' : ''}`} onClick={handleFlip}>
                 <div className="flashcard-inner">
                     <div className="flashcard-front">
@@ -1011,8 +1006,6 @@ const FlashcardView = ({ flashcards }) => {
                     </div>
                 </div>
             </div>
-
-            {/* Botões de ação sempre visíveis */}
             <div className="flashcard-actions">
                 <button className="btn btn-action-dont-know" onClick={() => handleAnswer(false)}>Não Lembro</button>
                 <button className="btn btn-action-know" onClick={() => handleAnswer(true)}>Já Domino</button>
@@ -1029,13 +1022,12 @@ const TableOfContents = ({ content }) => {
         if (!summaryContentElement) return;
 
         const newHeadings = [];
-        summaryContentElement.querySelectorAll('h2, h3').forEach((h, index) => { // Adicione 'index' aqui
+        summaryContentElement.querySelectorAll('h2, h3').forEach((h, index) => {
             const text = h.textContent;
-            // Adicione o 'index' ao final do id para garantir que seja único
             const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + `-${index}`;
             h.id = id;
             newHeadings.push({
-                id, // Agora a 'key' será sempre única
+                id,
                 text,
                 level: h.tagName.toLowerCase() === 'h2' ? 1 : 2
             });
@@ -1082,7 +1074,6 @@ const GoogleDrivePlayer = ({ url }) => {
     );
 };
 
-// MODIFICADO: Este é o componente com a nova funcionalidade de Flashcards
 const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate, onGenerateFlashcards }) => {
     const [activeTab, setActiveTab] = useState('summary');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -1104,7 +1095,7 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
         setIsGenerating(true);
         await onGenerateFlashcards(quantity);
         setIsGenerating(false);
-        setFlashcardModalOpen(false); // Fecha o modal após a geração
+        setFlashcardModalOpen(false);
     }
 
     const availableTabs = [
@@ -1175,7 +1166,8 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                         role="tabpanel"
                         className={activeTab === 'flashcards' ? '' : 'hidden'}
                     >
-                        {summary.flashcards && summary.flashcards.length > 0 ? (
+                        {/* A verificação aqui garante que `flashcards` tenha conteúdo antes de renderizar */}
+                        {(summary.flashcards && summary.flashcards.length > 0) ? (
                             <FlashcardView flashcards={summary.flashcards} />
                         ) : (
                             user.role === 'admin' && (
@@ -1360,11 +1352,25 @@ const App = () => {
             setSubjects(subjectsData || []);
 
             const { data: summariesData } = await supabase.from('summaries').select('*');
+            
+            // Função segura para parsear JSON
+            const parseJsonField = (field) => {
+                if (typeof field === 'string') {
+                    try {
+                        const parsed = JSON.parse(field);
+                        return Array.isArray(parsed) ? parsed : [];
+                    } catch (e) {
+                        return [];
+                    }
+                }
+                return Array.isArray(field) ? field : [];
+            };
+
             setSummaries(
               (summariesData || []).map(s => ({
                 ...s,
-                questions: typeof s.questions === 'string' ? JSON.parse(s.questions) : s.questions,
-                flashcards: typeof s.flashcards === 'string' ? JSON.parse(s.flashcards) : s.flashcards,
+                questions: parseJsonField(s.questions),
+                flashcards: parseJsonField(s.flashcards),
               }))
             );
         } else {
@@ -1471,10 +1477,22 @@ const App = () => {
     }
   };
 
+  // --- CORREÇÃO APLICADA AQUI ---
+  // A lógica de `update` foi corrigida para usar as variáveis corretas.
   const handleSaveSummary = async (summaryData) => {
-    const summaryPayload = { title: summaryData.title, content: summaryData.content, audio: summaryData.audio, video: summaryData.video, subject_id: summaryData.subject_id, user_id: session.user.id };
+    const summaryPayload = { 
+        title: summaryData.title, 
+        content: summaryData.content, 
+        audio: summaryData.audio, 
+        video: summaryData.video, 
+        subject_id: summaryData.subject_id, 
+        user_id: session.user.id 
+    };
     if (summaryData.id) {
-    const { data, error } = await supabase.from('summaries') .update({ content: String(newContent) }) .eq('id', summaryId) .select();
+        const { data, error } = await supabase.from('summaries')
+            .update({ title: summaryData.title, content: summaryData.content, audio: summaryData.audio, video: summaryData.video })
+            .eq('id', summaryData.id)
+            .select();
         if (error) alert(error.message);
         else if (data) setSummaries(summaries.map(s => s.id === data[0].id ? data[0] : s));
     } else {
@@ -1511,16 +1529,15 @@ const App = () => {
         const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere um quiz. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
         const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json", responseSchema: quizSchema } });
         const parsedJson = JSON.parse(response.text.trim());
-        const { error } = await supabase.from('summaries') .update({ questions: JSON.stringify(parsedJson.questions) }) .eq('id', currentSummaryId);
+        const { data, error } = await supabase.from('summaries') .update({ questions: parsedJson.questions }) .eq('id', currentSummaryId).select();
         if (error) throw error;
-        setSummaries(summaries.map(s => s.id === currentSummaryId ? { ...s, questions: parsedJson.questions } : s));
+        setSummaries(summaries.map(s => s.id === currentSummaryId ? { ...s, questions: data[0].questions } : s));
     } catch (e) {
         console.error("Erro ao gerar/salvar quiz:", e);
         alert("Falha ao gerar o quiz. Tente novamente.");
     }
   };
 
-  // NOVA FUNÇÃO: Para gerar Flashcards
   const handleGenerateFlashcards = async (quantity) => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
@@ -1532,7 +1549,7 @@ const App = () => {
             config: { responseMimeType: "application/json", responseSchema: flashcardsSchema }
         });
         const parsedJson = JSON.parse(response.text.trim());
-        const { data, error } = await supabase.from('summaries') .update({ flashcards: JSON.stringify(parsedJson.flashcards) }) .eq('id', currentSummaryId) .select();
+        const { data, error } = await supabase.from('summaries') .update({ flashcards: parsedJson.flashcards }) .eq('id', currentSummaryId) .select();
         if (error) throw error;
         setSummaries(summaries.map(s => s.id === currentSummaryId ? { ...s, flashcards: data[0].flashcards } : s));
     } catch (e) {
