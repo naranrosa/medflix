@@ -41,24 +41,29 @@ const quizSchema = {
   properties: {
     questions: {
       type: Type.ARRAY,
-      description: 'Uma lista de exatamente 5 questões de múltipla escolha.',
+      description: 'Uma lista de exatamente 5 questões de múltipla escolha no padrão Intercampi.',
       items: {
         type: Type.OBJECT,
         properties: {
-          questionText: { type: Type.STRING, description: 'O texto da pergunta.' },
+          questionNumber: { type: Type.STRING },
+          discipline: { type: Type.STRING },
+          campus: { type: Type.STRING },
+          knowledgeArea: { type: Type.STRING },
+          questionText: { type: Type.STRING },
           alternatives: {
             type: Type.ARRAY,
-            description: 'Uma lista de exatamente 4 alternativas em string.',
             items: { type: Type.STRING }
           },
-          correctAlternativeIndex: { type: Type.INTEGER, description: 'O índice de base 0 da alternativa correta na lista de alternativas.' }
+          correctAlternativeIndex: { type: Type.INTEGER, description: 'Índice (0-3) da alternativa correta' },
+          explanation: { type: Type.STRING, description: 'Comentário da resposta correta' }
         },
-        required: ['questionText', 'alternatives', 'correctAlternativeIndex']
+        required: ['questionNumber','discipline','campus','knowledgeArea','questionText','alternatives','correctAlternativeIndex','explanation']
       }
     }
   },
   required: ['questions']
 };
+
 
 const quizExplanationSchema = {
     type: Type.OBJECT,
@@ -71,6 +76,60 @@ const quizExplanationSchema = {
     required: ['explanation']
 };
 
+const QuizQuestion = ({ question }) => {
+  const [selected, setSelected] = useState<number | null>(null);
+
+  const handleAnswer = (index) => {
+    if (selected === null) {
+      setSelected(index);
+    }
+  };
+
+  return (
+    <div className="quiz-question">
+      <h3>{question.questionNumber}</h3>
+      <p><strong>Disciplina:</strong> {question.discipline}</p>
+      <p><strong>Campus:</strong> {question.campus}</p>
+      <p><strong>Área:</strong> {question.knowledgeArea}</p>
+      <p>{question.questionText}</p>
+
+      <ul>
+        {question.alternatives.map((alt, index) => {
+          const isCorrect = index === question.correctAlternativeIndex;
+          const isSelected = index === selected;
+
+          return (
+            <li
+              key={index}
+              className={`alternative
+                ${isSelected ? 'selected' : ''}
+                ${selected !== null && isCorrect ? 'correct' : ''}
+                ${selected !== null && isSelected && !isCorrect ? 'incorrect' : ''}`}
+              onClick={() => handleAnswer(index)}
+            >
+              {alt}
+            </li>
+          );
+        })}
+      </ul>
+
+      {selected !== null && (
+        <div className="feedback">
+          {selected === question.correctAlternativeIndex ? (
+            <p className="correct">✅ Você acertou!</p>
+          ) : (
+            <p className="incorrect">❌ Você errou.
+              <br />A resposta correta é: <strong>
+                {question.alternatives[question.correctAlternativeIndex]}
+              </strong>
+            </p>
+          )}
+          <p><strong>Comentário:</strong> {question.explanation}</p>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // --- FUNÇÕES AUXILIARES (HELPER FUNCTIONS) ---
 const subjectColors = ['#007BFF', '#28A745', '#DC3545', '#FFC107', '#17A2B8', '#6610f2', '#fd7e14', '#20c997', '#e83e8c'];
@@ -211,8 +270,10 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
     const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState('');
     const [audioFile, setAudioFile] = useState(null);
+    // NOVO: Estado para armazenar o texto do usuário
+    const [textContent, setTextContent] = useState('');
 
-    // Função auxiliar para converter o áudio em base64
+    // Função auxiliar para converter o áudio em base64 (mantida)
     const fileToBase64 = async (file) => {
         const arrayBuffer = await file.arrayBuffer();
         let binary = '';
@@ -225,37 +286,48 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
     };
 
     const handleUpdate = async () => {
-        if (!audioFile) {
-            setError('Por favor, selecione um arquivo de áudio.');
+        // --- LÓGICA ATUALIZADA ---
+        // Validação: Garante que pelo menos um dos dois (áudio ou texto) foi fornecido.
+        if (!audioFile && !textContent.trim()) {
+            setError('Por favor, selecione um arquivo de áudio ou cole o texto com as novas informações.');
             return;
         }
         setIsLoading(true);
         setError('');
 
         try {
-            // 1) Transcrição real do áudio
-            setLoadingMessage('Transcrevendo o áudio...');
-            const base64Audio = await fileToBase64(audioFile);
+            let textFromAudio = '';
+            // 1) Transcrição do áudio (se existir)
+            if (audioFile) {
+                setLoadingMessage('Transcrevendo o áudio...');
+                const base64Audio = await fileToBase64(audioFile);
 
-            const transcription = await ai.models.generateContent({
-                model: "gemini-2.5-flash", // modelo multimodal
-                contents: [
-                    {
-                        role: "user",
-                        parts: [
-                            { text: "Transcreva este áudio para texto em português médico-acadêmico:" },
-                            { inlineData: { mimeType: audioFile.type, data: base64Audio } }
-                        ]
-                    }
-                ]
-            });
+                const transcription = await ai.models.generateContent({
+                    model: "gemini-2.5-flash",
+                    contents: [
+                        {
+                            role: "user",
+                            parts: [
+                                { text: "Transcreva este áudio para texto em português médico-acadêmico:" },
+                                { inlineData: { mimeType: audioFile.type, data: base64Audio } }
+                            ]
+                        }
+                    ]
+                });
 
-            const textFromAudio = transcription.response?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            if (!textFromAudio) {
-                throw new Error("Falha na transcrição do áudio");
+                textFromAudio = transcription.response?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                if (!textFromAudio) {
+                    throw new Error("Falha na transcrição do áudio");
+                }
             }
 
-            // 2) Atualização do resumo com IA
+            // 2) Combina as informações do áudio e do texto
+            const newInformation = `
+                ${textFromAudio ? `Informações do áudio transcrito:\n"""${textFromAudio}"""\n\n` : ''}
+                ${textContent.trim() ? `Informações do texto fornecido:\n"""${textContent.trim()}"""` : ''}
+            `.trim();
+
+            // 3) Atualização do resumo com IA
             setLoadingMessage('Atualizando o resumo com as novas informações...');
             const updatePrompt = `Você é um especialista em redação médica.
             Sua tarefa é atualizar o resumo abaixo com as novas informações da aula,
@@ -266,8 +338,8 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
             ${summary.content}
             \`\`\`
 
-            Novas informações extraídas do áudio:
-            "${textFromAudio}"
+            Novas informações para adicionar/integrar:
+            "${newInformation}"
 
             Forneça o resumo atualizado completo em HTML.`;
 
@@ -284,7 +356,7 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
             onUpdate(parsedJson.enhancedContent);
         } catch (e) {
             console.error(e);
-            setError('Falha ao processar o áudio ou atualizar o resumo. Tente novamente.');
+            setError('Falha ao processar as informações ou atualizar o resumo. Tente novamente.');
             setIsLoading(false);
         }
     };
@@ -296,11 +368,13 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
                     <>
                         <h2>Atualizar Resumo com IA</h2>
                         <p>
-                            Faça o upload do áudio da aula mais recente. A IA irá transcrever, analisar e integrar
+                            Faça o upload do áudio da aula ou cole abaixo as anotações. A IA irá analisar e integrar
                             as informações no resumo atual.
                         </p>
+
+                        {/* Campo de Upload de Áudio (mantido) */}
                         <div className="form-group">
-                            <label>Áudio da Aula</label>
+                            <label>Opção 1: Áudio da Aula</label>
                             <input
                                 className="input"
                                 type="file"
@@ -308,10 +382,23 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
                                 onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
                             />
                         </div>
+
+                        {/* NOVO: Campo de Texto */}
+                        <div className="form-group">
+                             <label>Opção 2: Novas Informações (Texto)</label>
+                             <textarea
+                                placeholder="Cole aqui o texto ou anotações a serem adicionadas ao resumo..."
+                                value={textContent}
+                                onChange={(e) => setTextContent(e.target.value)}
+                                rows={8} // Altura inicial do campo de texto
+                            />
+                        </div>
+
                         {error && <p style={{ color: 'var(--danger-accent)', marginTop: '1rem' }}>{error}</p>}
                         <div className="modal-actions">
                             <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-                            <button className="btn btn-primary" onClick={handleUpdate} disabled={!audioFile}>
+                            {/* Lógica do botão atualizada */}
+                            <button className="btn btn-primary" onClick={handleUpdate} disabled={!audioFile && !textContent.trim()}>
                                 Processar e Atualizar
                             </button>
                         </div>
@@ -326,8 +413,6 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
         </div>
     );
 };
-
-
 
 const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
     const [isLoading, setIsLoading] = useState(false);
