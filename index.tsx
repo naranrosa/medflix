@@ -80,13 +80,10 @@ const getNewSubjectColor = (existingSubjects) => {
     return availableColor || subjectColors[Math.floor(Math.random() * subjectColors.length)];
 };
 
-// MODIFICADO: Função para obter o link de embed do Google Drive
 const getGoogleDriveEmbedUrl = (url) => {
     if (!url) return null;
-    // Regex para extrair o ID do arquivo de um link do Google Drive
     const regExp = /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/;
     const match = url.match(regExp);
-    // Se encontrar o ID, constrói a URL de "preview" que funciona em iframes
     return (match && match[1]) ? `https://drive.google.com/file/d/${match[1]}/preview` : null;
 };
 
@@ -98,7 +95,6 @@ const getSpotifyEmbedUrl = (url) => {
     }
     return null;
 };
-
 
 // --- COMPONENTES ---
 
@@ -124,6 +120,8 @@ const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" heig
 const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
 const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
 const SparklesIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L14.39 8.36L21 9.27L16.36 14.14L18.18 21L12 17.27L5.82 21L7.64 14.14L3 9.27L9.61 8.36L12 2z"/></svg>;
+// NOVO: Ícone para o botão de exibir/ocultar o sumário
+const ListIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
 
 
 const Breadcrumbs = ({ paths }) => (
@@ -159,7 +157,7 @@ const LoginScreen = ({ theme, toggleTheme }) => {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
 
-    } catch (error) {
+    } catch (error) { // <-- CORREÇÃO: Removido o "=>" daqui
       setError("Email ou senha inválidos. Tente novamente.");
     } finally {
       setLoading(false);
@@ -214,6 +212,7 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
     const [error, setError] = useState('');
     const [audioFile, setAudioFile] = useState(null);
 
+    // Função auxiliar para converter o áudio em base64
     const fileToBase64 = async (file) => {
         const arrayBuffer = await file.arrayBuffer();
         let binary = '';
@@ -234,11 +233,12 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
         setError('');
 
         try {
+            // 1) Transcrição real do áudio
             setLoadingMessage('Transcrevendo o áudio...');
             const base64Audio = await fileToBase64(audioFile);
 
             const transcription = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-2.5-flash", // modelo multimodal
                 contents: [
                     {
                         role: "user",
@@ -255,6 +255,7 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
                 throw new Error("Falha na transcrição do áudio");
             }
 
+            // 2) Atualização do resumo com IA
             setLoadingMessage('Atualizando o resumo com as novas informações...');
             const updatePrompt = `Você é um especialista em redação médica.
             Sua tarefa é atualizar o resumo abaixo com as novas informações da aula,
@@ -395,17 +396,20 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
 };
 
 const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, userProgress }) => {
+  // Estado para controlar se a barra lateral está aberta ou fechada
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const isSearching = searchQuery.trim() !== '';
 
   const handleSelectAndClose = (subject) => {
     onSelectSubject(subject);
-    setSidebarOpen(false);
+    setSidebarOpen(false); // Fecha a sidebar após a seleção
   };
 
   return (
     <>
+      {/* A Sidebar agora vive aqui, mas só é visível quando 'isOpen' é true */}
       <Sidebar isOpen={isSidebarOpen} onClose={() => setSidebarOpen(false)} title={termName}>
+        {/* O conteúdo da sidebar é a própria grade de disciplinas */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
             {user.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
         </div>
@@ -435,6 +439,7 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
 
       <div className="container dashboard">
         <div className="dashboard-header">
+          {/* O botão hamburger aparece aqui, mas só é visível no celular (via CSS) */}
           <button className="hamburger-btn" onClick={() => setSidebarOpen(true)}>
             <HamburgerIcon />
           </button>
@@ -488,10 +493,12 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
               </div>
             )}
 
+            {/* O contêiner para o botão foi renomeado para ser alvo do CSS de ocultar */}
             <div className="add-subject-button-container" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
                 {user.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
             </div>
 
+            {/* A grade de disciplinas original. Será OCULTA no celular pelo CSS. */}
             <div className="subject-grid">
               {subjects.map(subject => {
                 const subjectSummaries = searchResults.allSummaries.filter(s => s.subject_id === subject.id);
@@ -536,13 +543,19 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
     const handleSubmit = (e) => {
         e.preventDefault();
 
+        // --- ESTA É A VALIDAÇÃO QUE ESTAVA FALTANDO ---
+        // Se o usuário for admin e não tiver selecionado um período, mostre um alerta e pare.
         if (user?.role === 'admin' && !selectedTermId) {
             alert('Por favor, selecione um período para esta disciplina.');
-            return;
+            return; // Impede o envio do formulário
         }
+        // -------------------------------------------------
 
         const finalColor = (subject && subject.color) ? subject.color : getNewSubjectColor(existingSubjects);
+
+        // Usa o term_id do estado do modal (para admins) ou o do perfil do usuário (para estudantes)
         const termIdToSave = user?.role === 'admin' ? selectedTermId : user?.term_id;
+
         onSave({ ...subject, name, color: finalColor, term_id: termIdToSave });
     };
 
@@ -564,7 +577,7 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
                                 className="select-input"
                                 value={selectedTermId}
                                 onChange={(e) => setSelectedTermId(e.target.value)}
-                                required
+                                required // O 'required' aqui ajuda, mas a validação no JS é mais segura
                             >
                                 <option value="" disabled>Selecione um período...</option>
                                 {terms.map(term => (
@@ -665,7 +678,6 @@ const SummaryModal = ({ isOpen, onClose, onSave, summary, subjectId }) => {
                             />
                         </div>
 
-                         {/* MODIFICADO: Label e placeholder para o vídeo do Google Drive */}
                          <div className="form-group">
                             <label htmlFor="summary-video-link">Link do Vídeo do Google Drive</label>
                             <input
@@ -860,18 +872,13 @@ const TableOfContents = ({ content }) => {
     );
 };
 
-// NOVO: Componente para o player do Google Drive
 const GoogleDrivePlayer = ({ url }) => {
     const embedUrl = getGoogleDriveEmbedUrl(url);
     if (!embedUrl) return <p>Link do Google Drive inválido.</p>;
-    // Adicione a classe 'youtube-player-container' ou crie uma nova
-    // para garantir a responsividade do iframe.
     return (
         <div className="youtube-player-container">
             <iframe
                 src={embedUrl}
-                width="640"
-                height="480"
                 allow="autoplay"
                 frameBorder="0"
                 title="Vídeo do Google Drive">
@@ -885,18 +892,23 @@ const SpotifyPlayer = ({ url }) => {
     if (!embedUrl) return <p>Link do Spotify inválido ou não suportado.</p>;
     return (
         <div className="spotify-player-container">
-            <iframe style={{ borderRadius: '12px' }} src={`${embedUrl}?utm_source=generator`} width="100%" height="152" frameBorder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title="Player do Spotify"></iframe>
+            <iframe src={`${embedUrl}?utm_source=generator`} frameBorder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title="Player do Spotify"></iframe>
         </div>
     );
 };
 
 
+// MODIFICADO: Este é o componente com a nova funcionalidade
 const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate }) => {
     const [activeTab, setActiveTab] = useState('summary');
     const [isGenerating, setIsGenerating] = useState(false);
+    // 1. Adicionado estado para controlar a visibilidade do sumário (Table of Contents)
+    const [isTocVisible, setIsTocVisible] = useState(true);
 
     useEffect(() => {
         setActiveTab('summary');
+        // Reseta a visibilidade do sumário sempre que um novo resumo for carregado
+        setIsTocVisible(true);
     }, [summary]);
 
     const handleGenerateQuiz = async () => {
@@ -907,7 +919,6 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
 
     const availableTabs = [
         { id: 'summary', label: 'Resumo', condition: true },
-        // MODIFICADO: A condição para a aba de vídeo permanece a mesma
         { id: 'video', label: 'Vídeo', condition: !!summary.video },
         { id: 'podcast', label: 'Podcast', condition: !!summary.audio },
         { id: 'questions', label: 'Questões', condition: (summary.questions && summary.questions.length > 0) || user.role === 'admin' }
@@ -915,9 +926,16 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
 
     return (
         <div className="summary-detail-layout">
-            {activeTab === 'summary' && <TableOfContents content={summary.content} />}
+            {/* 4. A renderização do sumário agora depende do estado 'isTocVisible' */}
+            {activeTab === 'summary' && isTocVisible && <TableOfContents content={summary.content} />}
             <div className="summary-detail-view">
                 <div className="summary-header">
+                    {/* 2. Adicionado o botão para controlar a visibilidade. Ele só aparece na aba 'Resumo' */}
+                    {activeTab === 'summary' && (
+                        <IconButton onClick={() => setIsTocVisible(!isTocVisible)} className="toc-toggle-btn">
+                            <ListIcon />
+                        </IconButton>
+                    )}
                     <h1 className="summary-detail-title">{summary.title}</h1>
                     <div className="summary-detail-actions">
                         <button className="btn btn-secondary" onClick={onToggleComplete}>
@@ -946,7 +964,6 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                     {activeTab === 'summary' && (
                         <div id="tab-panel-summary" role="tabpanel" className="summary-content" dangerouslySetInnerHTML={{ __html: summary.content }}></div>
                     )}
-                    {/* MODIFICADO: Renderiza o GoogleDrivePlayer em vez do YoutubePlayer */}
                     {activeTab === 'video' && <div id="tab-panel-video" role="tabpanel">{summary.video && <GoogleDrivePlayer url={summary.video} />}</div>}
                     {activeTab === 'podcast' && <div id="tab-panel-podcast" role="tabpanel">{summary.audio && <SpotifyPlayer url={summary.audio} />}</div>}
                     {activeTab === 'questions' && (
@@ -997,6 +1014,7 @@ const Sidebar = ({ isOpen, onClose, title, children }) => {
     );
 };
 
+// Componente para o usuário escolher seu termo inicial
 const TermSelector = ({ user, terms, onTermUpdate }) => {
     const [selectedTerm, setSelectedTerm] = useState('');
     const [loading, setLoading] = useState(false);
@@ -1039,8 +1057,9 @@ const TermSelector = ({ user, terms, onTermUpdate }) => {
 };
 
 
-// --- COMPONENTE PRINCIPAL APP ---
+// --- COMPONENTE PRINCIPAL APP ATUALIZADO E COMPLETO ---
 const App = () => {
+  // State de Autenticação e UI
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [terms, setTerms] = useState([]);
@@ -1049,11 +1068,13 @@ const App = () => {
   const [currentSubjectId, setCurrentSubjectId] = useState(null);
   const [currentSummaryId, setCurrentSummaryId] = useState(null);
 
+  // State de Dados
   const [subjects, setSubjects] = useState([]);
   const [summaries, setSummaries] = useState([]);
   const [userProgress, setUserProgress] = useState({ completedSummaries: [], lastCompletionDate: null, streak: 0 });
   const [lastViewed, setLastViewed] = useState([]);
 
+  // State de Modais
   const [isSubjectModalOpen, setSubjectModalOpen] = useState(false);
   const [isSummaryModalOpen, setSummaryModalOpen] = useState(false);
   const [isAIEnhanceModalOpen, setAIEnhanceModalOpen] = useState(false);
@@ -1061,8 +1082,10 @@ const App = () => {
   const [editingSubject, setEditingSubject] = useState(null);
   const [editingSummary, setEditingSummary] = useState(null);
 
+  // State de Busca
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Gerencia a sessão de autenticação e busca os termos
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -1081,6 +1104,7 @@ const App = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Busca o perfil do usuário e os dados do seu termo quando a sessão muda
   useEffect(() => {
     if (session?.user) {
       const fetchUserProfileAndData = async () => {
@@ -1117,6 +1141,7 @@ const App = () => {
     }
   }, [session]);
 
+  // Salva dados no localStorage
   useEffect(() => {
     localStorage.setItem('theme', theme);
     if (session) {
