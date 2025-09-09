@@ -490,10 +490,15 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
 
 // NOVO: Modal para gerar Flashcards
 const AIGenerateFlashcardsModal = ({ onClose, onGenerate, isGenerating }) => {
-    const [quantity, setQuantity] = useState(10); // Default quantity
+    // O estado agora armazena a quantidade como uma string '10'
+    // para permitir que o campo de input fique temporariamente vazio sem causar erros.
+    const [quantity, setQuantity] = useState('10');
 
     const handleGenerateClick = () => {
-        onGenerate(quantity);
+        // A conversão para número acontece aqui, com um valor padrão de 10
+        // caso o campo esteja vazio ou inválido.
+        const numQuantity = parseInt(quantity, 10) || 10;
+        onGenerate(numQuantity);
     };
 
     return (
@@ -510,7 +515,7 @@ const AIGenerateFlashcardsModal = ({ onClose, onGenerate, isGenerating }) => {
                                 className="input"
                                 type="number"
                                 value={quantity}
-                                onChange={(e) => setQuantity(parseInt(e.target.value, 10))}
+                                onChange={(e) => setQuantity(e.target.value)} // Apenas atualiza o estado da string
                                 min="1"
                                 max="20"
                             />
@@ -717,7 +722,6 @@ const SimpleRichTextEditor = ({ value, onChange, textareaRef }) => {
 const SummaryModal = ({ isOpen, onClose, onSave, summary, subjectId }) => {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
-    const [audio, setAudio] = useState('');
     const [video, setVideo] = useState('');
     const [isAIEnhanceModalOpen, setAIEnhanceModalOpen] = useState(false);
     const textareaRef = useRef(null);
@@ -726,7 +730,6 @@ const SummaryModal = ({ isOpen, onClose, onSave, summary, subjectId }) => {
         if (isOpen) {
             setTitle(summary?.title || '');
             setContent(String(summary?.content || ''));
-            setAudio(summary?.audio || '');
             setVideo(summary?.video || '');
         }
     }, [isOpen, summary]);
@@ -735,7 +738,7 @@ const SummaryModal = ({ isOpen, onClose, onSave, summary, subjectId }) => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        onSave({ ...summary, title, content, audio, video, subject_id: subjectId });
+        onSave({ ...summary, title, content, video, subject_id: subjectId });
     };
 
     return (
@@ -751,18 +754,6 @@ const SummaryModal = ({ isOpen, onClose, onSave, summary, subjectId }) => {
                         <div className="form-group">
                             <label>Conteúdo</label>
                             <SimpleRichTextEditor value={content} onChange={setContent} textareaRef={textareaRef} />
-                        </div>
-
-                         <div className="form-group">
-                            <label htmlFor="summary-audio-link">Link do Áudio do Spotify</label>
-                            <input
-                                id="summary-audio-link"
-                                className="input"
-                                type="url"
-                                placeholder="https://open.spotify.com/..."
-                                value={audio}
-                                onChange={e => setAudio(e.target.value)}
-                            />
                         </div>
 
                          <div className="form-group">
@@ -983,7 +974,7 @@ const FlashcardView = ({ flashcards }) => {
             </div>
         );
     }
-    
+
     // Mostra mensagem se não houver flashcards
     if (!deck || deck.length === 0) {
         return <div className="flashcard-container"><p>Nenhum flashcard para exibir.</p></div>;
@@ -1352,7 +1343,7 @@ const App = () => {
             setSubjects(subjectsData || []);
 
             const { data: summariesData } = await supabase.from('summaries').select('*');
-            
+
             // Função segura para parsear JSON
             const parseJsonField = (field) => {
                 if (typeof field === 'string') {
@@ -1480,17 +1471,18 @@ const App = () => {
   // --- CORREÇÃO APLICADA AQUI ---
   // A lógica de `update` foi corrigida para usar as variáveis corretas.
   const handleSaveSummary = async (summaryData) => {
-    const summaryPayload = { 
-        title: summaryData.title, 
-        content: summaryData.content, 
-        audio: summaryData.audio, 
-        video: summaryData.video, 
-        subject_id: summaryData.subject_id, 
-        user_id: session.user.id 
+    // REMOVIDO: 'audio' do payload de inserção
+    const summaryPayload = {
+        title: summaryData.title,
+        content: summaryData.content,
+        video: summaryData.video,
+        subject_id: summaryData.subject_id,
+        user_id: session.user.id
     };
     if (summaryData.id) {
         const { data, error } = await supabase.from('summaries')
-            .update({ title: summaryData.title, content: summaryData.content, audio: summaryData.audio, video: summaryData.video })
+            // REMOVIDO: 'audio' do objeto de atualização
+            .update({ title: summaryData.title, content: summaryData.content, video: summaryData.video })
             .eq('id', summaryData.id)
             .select();
         if (error) alert(error.message);
@@ -1526,12 +1518,20 @@ const App = () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
     try {
-        const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere um quiz. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
+        const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere um quiz de 5 questões. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
         const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json", responseSchema: quizSchema } });
         const parsedJson = JSON.parse(response.text.trim());
-        const { data, error } = await supabase.from('summaries') .update({ questions: parsedJson.questions }) .eq('id', currentSummaryId).select();
+
+        const { data, error } = await supabase.from('summaries')
+            .update({ questions: parsedJson.questions })
+            .eq('id', currentSummaryId)
+            .select()
+            .single();
+
         if (error) throw error;
-        setSummaries(summaries.map(s => s.id === currentSummaryId ? { ...s, questions: data[0].questions } : s));
+
+        setSummaries(summaries.map(s => s.id === currentSummaryId ? data : s));
+
     } catch (e) {
         console.error("Erro ao gerar/salvar quiz:", e);
         alert("Falha ao gerar o quiz. Tente novamente.");
@@ -1542,16 +1542,26 @@ const App = () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
     try {
-        const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere exatamente ${quantity} flashcards (com frente e verso) para estudo. A frente deve ser um conceito ou pergunta, e o verso a resposta ou explicação. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
+        const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere exatamente ${quantity} flashcards. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
         const response = await ai.models.generateContent({
             model,
             contents: prompt,
             config: { responseMimeType: "application/json", responseSchema: flashcardsSchema }
         });
         const parsedJson = JSON.parse(response.text.trim());
-        const { data, error } = await supabase.from('summaries') .update({ flashcards: parsedJson.flashcards }) .eq('id', currentSummaryId) .select();
+
+        // Altere a chamada ao Supabase para ser mais robusta
+        const { data, error } = await supabase.from('summaries')
+            .update({ flashcards: parsedJson.flashcards }) // supabase-js v2 lida com a conversão do objeto
+            .eq('id', currentSummaryId)
+            .select()
+            .single(); // Use .single() para obter um único objeto de volta
+
         if (error) throw error;
-        setSummaries(summaries.map(s => s.id === currentSummaryId ? { ...s, flashcards: data[0].flashcards } : s));
+
+        // Atualiza o estado local com os dados exatos que foram retornados do banco
+        setSummaries(summaries.map(s => s.id === currentSummaryId ? data : s));
+
     } catch (e) {
         console.error("Erro ao gerar/salvar flashcards:", e);
         alert("Falha ao gerar os flashcards. Tente novamente.");
