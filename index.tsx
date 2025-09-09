@@ -80,11 +80,14 @@ const getNewSubjectColor = (existingSubjects) => {
     return availableColor || subjectColors[Math.floor(Math.random() * subjectColors.length)];
 };
 
-const getYoutubeVideoId = (url) => {
+// MODIFICADO: Função para obter o link de embed do Google Drive
+const getGoogleDriveEmbedUrl = (url) => {
     if (!url) return null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    // Regex para extrair o ID do arquivo de um link do Google Drive
+    const regExp = /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/;
     const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
+    // Se encontrar o ID, constrói a URL de "preview" que funciona em iframes
+    return (match && match[1]) ? `https://drive.google.com/file/d/${match[1]}/preview` : null;
 };
 
 const getSpotifyEmbedUrl = (url) => {
@@ -95,6 +98,7 @@ const getSpotifyEmbedUrl = (url) => {
     }
     return null;
 };
+
 
 // --- COMPONENTES ---
 
@@ -155,7 +159,7 @@ const LoginScreen = ({ theme, toggleTheme }) => {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
 
-    } catch (error) { // <-- CORREÇÃO: Removido o "=>" daqui
+    } catch (error) {
       setError("Email ou senha inválidos. Tente novamente.");
     } finally {
       setLoading(false);
@@ -208,9 +212,8 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState('');
-    const [audioFile, setAudioFile] = useState<File | null>(null);
+    const [audioFile, setAudioFile] = useState(null);
 
-    // Função auxiliar para converter o áudio em base64
     const fileToBase64 = async (file) => {
         const arrayBuffer = await file.arrayBuffer();
         let binary = '';
@@ -231,12 +234,11 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
         setError('');
 
         try {
-            // 1) Transcrição real do áudio
             setLoadingMessage('Transcrevendo o áudio...');
             const base64Audio = await fileToBase64(audioFile);
 
             const transcription = await ai.models.generateContent({
-                model: "gemini-2.5-flash", // modelo multimodal
+                model: "gemini-2.5-flash",
                 contents: [
                     {
                         role: "user",
@@ -253,7 +255,6 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
                 throw new Error("Falha na transcrição do áudio");
             }
 
-            // 2) Atualização do resumo com IA
             setLoadingMessage('Atualizando o resumo com as novas informações...');
             const updatePrompt = `Você é um especialista em redação médica.
             Sua tarefa é atualizar o resumo abaixo com as novas informações da aula,
@@ -394,20 +395,17 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
 };
 
 const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, userProgress }) => {
-  // Estado para controlar se a barra lateral está aberta ou fechada
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const isSearching = searchQuery.trim() !== '';
 
   const handleSelectAndClose = (subject) => {
     onSelectSubject(subject);
-    setSidebarOpen(false); // Fecha a sidebar após a seleção
+    setSidebarOpen(false);
   };
 
   return (
     <>
-      {/* A Sidebar agora vive aqui, mas só é visível quando 'isOpen' é true */}
       <Sidebar isOpen={isSidebarOpen} onClose={() => setSidebarOpen(false)} title={termName}>
-        {/* O conteúdo da sidebar é a própria grade de disciplinas */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
             {user.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
         </div>
@@ -437,7 +435,6 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
 
       <div className="container dashboard">
         <div className="dashboard-header">
-          {/* O botão hamburger aparece aqui, mas só é visível no celular (via CSS) */}
           <button className="hamburger-btn" onClick={() => setSidebarOpen(true)}>
             <HamburgerIcon />
           </button>
@@ -491,12 +488,10 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
               </div>
             )}
 
-            {/* O contêiner para o botão foi renomeado para ser alvo do CSS de ocultar */}
             <div className="add-subject-button-container" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
                 {user.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
             </div>
 
-            {/* A grade de disciplinas original. Será OCULTA no celular pelo CSS. */}
             <div className="subject-grid">
               {subjects.map(subject => {
                 const subjectSummaries = searchResults.allSummaries.filter(s => s.subject_id === subject.id);
@@ -541,19 +536,13 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
     const handleSubmit = (e) => {
         e.preventDefault();
 
-        // --- ESTA É A VALIDAÇÃO QUE ESTAVA FALTANDO ---
-        // Se o usuário for admin e não tiver selecionado um período, mostre um alerta e pare.
         if (user?.role === 'admin' && !selectedTermId) {
             alert('Por favor, selecione um período para esta disciplina.');
-            return; // Impede o envio do formulário
+            return;
         }
-        // -------------------------------------------------
 
         const finalColor = (subject && subject.color) ? subject.color : getNewSubjectColor(existingSubjects);
-
-        // Usa o term_id do estado do modal (para admins) ou o do perfil do usuário (para estudantes)
         const termIdToSave = user?.role === 'admin' ? selectedTermId : user?.term_id;
-
         onSave({ ...subject, name, color: finalColor, term_id: termIdToSave });
     };
 
@@ -575,7 +564,7 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
                                 className="select-input"
                                 value={selectedTermId}
                                 onChange={(e) => setSelectedTermId(e.target.value)}
-                                required // O 'required' aqui ajuda, mas a validação no JS é mais segura
+                                required
                             >
                                 <option value="" disabled>Selecione um período...</option>
                                 {terms.map(term => (
@@ -670,19 +659,20 @@ const SummaryModal = ({ isOpen, onClose, onSave, summary, subjectId }) => {
                                 id="summary-audio-link"
                                 className="input"
                                 type="url"
-                                placeholder="https://open.spotify.com/episode/..."
+                                placeholder="https://open.spotify.com/..."
                                 value={audio}
                                 onChange={e => setAudio(e.target.value)}
                             />
                         </div>
 
+                         {/* MODIFICADO: Label e placeholder para o vídeo do Google Drive */}
                          <div className="form-group">
-                            <label htmlFor="summary-video-link">Link do Vídeo do YouTube</label>
+                            <label htmlFor="summary-video-link">Link do Vídeo do Google Drive</label>
                             <input
                                 id="summary-video-link"
                                 className="input"
                                 type="url"
-                                placeholder="https://www.youtube.com/watch?v=..."
+                                placeholder="https://drive.google.com/file/d/..."
                                 value={video}
                                 onChange={e => setVideo(e.target.value)}
                             />
@@ -870,12 +860,22 @@ const TableOfContents = ({ content }) => {
     );
 };
 
-const YoutubePlayer = ({ url }) => {
-    const videoId = getYoutubeVideoId(url);
-    if (!videoId) return <p>Link do YouTube inválido.</p>;
+// NOVO: Componente para o player do Google Drive
+const GoogleDrivePlayer = ({ url }) => {
+    const embedUrl = getGoogleDriveEmbedUrl(url);
+    if (!embedUrl) return <p>Link do Google Drive inválido.</p>;
+    // Adicione a classe 'youtube-player-container' ou crie uma nova
+    // para garantir a responsividade do iframe.
     return (
         <div className="youtube-player-container">
-            <iframe src={`https://www.youtube.com/embed/${videoId}`} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen title="Vídeo do YouTube"></iframe>
+            <iframe
+                src={embedUrl}
+                width="640"
+                height="480"
+                allow="autoplay"
+                frameBorder="0"
+                title="Vídeo do Google Drive">
+            </iframe>
         </div>
     );
 };
@@ -885,7 +885,7 @@ const SpotifyPlayer = ({ url }) => {
     if (!embedUrl) return <p>Link do Spotify inválido ou não suportado.</p>;
     return (
         <div className="spotify-player-container">
-            <iframe src={`${embedUrl}?utm_source=generator`} frameBorder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title="Player do Spotify"></iframe>
+            <iframe style={{ borderRadius: '12px' }} src={`${embedUrl}?utm_source=generator`} width="100%" height="152" frameBorder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title="Player do Spotify"></iframe>
         </div>
     );
 };
@@ -907,6 +907,7 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
 
     const availableTabs = [
         { id: 'summary', label: 'Resumo', condition: true },
+        // MODIFICADO: A condição para a aba de vídeo permanece a mesma
         { id: 'video', label: 'Vídeo', condition: !!summary.video },
         { id: 'podcast', label: 'Podcast', condition: !!summary.audio },
         { id: 'questions', label: 'Questões', condition: (summary.questions && summary.questions.length > 0) || user.role === 'admin' }
@@ -945,7 +946,8 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                     {activeTab === 'summary' && (
                         <div id="tab-panel-summary" role="tabpanel" className="summary-content" dangerouslySetInnerHTML={{ __html: summary.content }}></div>
                     )}
-                    {activeTab === 'video' && <div id="tab-panel-video" role="tabpanel">{summary.video && <YoutubePlayer url={summary.video} />}</div>}
+                    {/* MODIFICADO: Renderiza o GoogleDrivePlayer em vez do YoutubePlayer */}
+                    {activeTab === 'video' && <div id="tab-panel-video" role="tabpanel">{summary.video && <GoogleDrivePlayer url={summary.video} />}</div>}
                     {activeTab === 'podcast' && <div id="tab-panel-podcast" role="tabpanel">{summary.audio && <SpotifyPlayer url={summary.audio} />}</div>}
                     {activeTab === 'questions' && (
                         <div id="tab-panel-questions" role="tabpanel">
@@ -985,7 +987,7 @@ const Sidebar = ({ isOpen, onClose, title, children }) => {
             <div className={`sidebar ${isOpen ? 'open' : ''}`}>
                 <div className="sidebar-header">
                     <h3>{title}</h3>
-                    <button className="close-btn" onClick={onClose}>&times;</button>
+                    <button className="close-btn" onClick={onClose}>×</button>
                 </div>
                 <div className="sidebar-content">
                     {children}
@@ -995,7 +997,6 @@ const Sidebar = ({ isOpen, onClose, title, children }) => {
     );
 };
 
-// Componente para o usuário escolher seu termo inicial
 const TermSelector = ({ user, terms, onTermUpdate }) => {
     const [selectedTerm, setSelectedTerm] = useState('');
     const [loading, setLoading] = useState(false);
@@ -1038,9 +1039,8 @@ const TermSelector = ({ user, terms, onTermUpdate }) => {
 };
 
 
-// --- COMPONENTE PRINCIPAL APP ATUALIZADO E COMPLETO ---
+// --- COMPONENTE PRINCIPAL APP ---
 const App = () => {
-  // State de Autenticação e UI
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [terms, setTerms] = useState([]);
@@ -1049,13 +1049,11 @@ const App = () => {
   const [currentSubjectId, setCurrentSubjectId] = useState(null);
   const [currentSummaryId, setCurrentSummaryId] = useState(null);
 
-  // State de Dados
   const [subjects, setSubjects] = useState([]);
   const [summaries, setSummaries] = useState([]);
   const [userProgress, setUserProgress] = useState({ completedSummaries: [], lastCompletionDate: null, streak: 0 });
   const [lastViewed, setLastViewed] = useState([]);
 
-  // State de Modais
   const [isSubjectModalOpen, setSubjectModalOpen] = useState(false);
   const [isSummaryModalOpen, setSummaryModalOpen] = useState(false);
   const [isAIEnhanceModalOpen, setAIEnhanceModalOpen] = useState(false);
@@ -1063,10 +1061,8 @@ const App = () => {
   const [editingSubject, setEditingSubject] = useState(null);
   const [editingSummary, setEditingSummary] = useState(null);
 
-  // State de Busca
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Gerencia a sessão de autenticação e busca os termos
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -1085,7 +1081,6 @@ const App = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Busca o perfil do usuário e os dados do seu termo quando a sessão muda
   useEffect(() => {
     if (session?.user) {
       const fetchUserProfileAndData = async () => {
@@ -1122,7 +1117,6 @@ const App = () => {
     }
   }, [session]);
 
-  // Salva dados no localStorage
   useEffect(() => {
     localStorage.setItem('theme', theme);
     if (session) {
