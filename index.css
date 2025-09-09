@@ -1712,3 +1712,125 @@ body.light-mode .login-card .select-input:focus {
     justify-content: center;
   }
 }
+
+/* --- ESTILOS PARA A NOVA FUNCIONALIDADE DE FLASHCARDS (VERSÃO COMPLETA E CORRIGIDA) --- */
+
+.flashcard-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center; /* Centraliza todo o bloco verticalmente */
+  padding: 2rem 1rem;
+  gap: 2.5rem; /* Espaçamento entre o card e os botões */
+}
+
+.flashcard-progress {
+  font-size: 1rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Container que define a perspectiva 3D */
+.flashcard {
+  width: 100%;
+  max-width: 550px;
+  height: 300px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  perspective: 1200px;
+  flex-shrink: 0;
+}
+
+/* Elemento interno que executa a animação de virar */
+.flashcard-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.6s;
+  transform-style: preserve-3d; /* CORRIGIDO: Garante o 3D correto */
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.flashcard.is-flipped .flashcard-inner {
+  transform: rotateY(180deg);
+}
+
+/* Estilo comum para a frente e o verso */
+.flashcard-front,
+.flashcard-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  border-radius: 16px;
+  text-align: center;
+  line-height: 1.5;
+  font-weight: 500;
+  overflow: auto;
+}
+
+/* Frente do Card */
+.flashcard-front {
+  background-color: var(--surface-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  font-size: 1.4rem;
+}
+
+/* Verso do Card */
+.flashcard-back {
+  background: linear-gradient(45deg, #007BFF, #0056b3);
+  color: #ffffff;
+  transform: rotateY(180deg);
+  font-size: 1.2rem;
+  font-weight: 400;
+}
+
+/* Botões de Ação */
+.flashcard-actions {
+  display: flex;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 550px;
+  justify-content: center;
+  padding-bottom: 1rem;
+}
+
+.btn-action-dont-know,
+.btn-action-know {
+  flex-basis: 200px;
+  padding: 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  transition: all 0.2s ease-in-out;
+}
+.btn-action-dont-know:hover,
+.btn-action-know:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+
+.btn-action-dont-know {
+  background-color: #ff4d4d;
+  color: white;
+}
+
+.btn-action-know {
+  background-color: #28a745;
+  color: white;
+}
+
+/* Tela de Conclusão */
+.finished-deck {
+  justify-content: center;
+  text-align: center;
+}
