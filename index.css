@@ -1546,3 +1546,54 @@ body.light-mode .login-card .select-input:focus {
     display: none;
   }
 }
+
+/*
+ * CSS para o Cabeçalho da Tela de Detalhes do Resumo
+ */
+
+/* 1. Transforma o cabeçalho em um container flexível */
+.summary-header {
+  display: flex;
+  align-items: center; /* Alinha verticalmente o ícone, título e botões */
+  width: 100%;
+  margin-bottom: 1.5rem; /* Mantém um espaço abaixo do cabeçalho */
+}
+
+/* 2. Estiliza o novo botão de toggle do sumário */
+.toc-toggle-btn {
+  /* Adiciona um espaço à direita do ícone para não ficar colado no título */
+  margin-right: 1rem;
+}
+
+/* Garante que o título do resumo ocupe o espaço necessário */
+.summary-detail-title {
+  margin-right: 1rem; /* Adiciona margem para o caso de o título ser muito longo */
+}
+
+/* 3. Empurra o container de ações (editar, apagar, etc.) para a extrema direita */
+.summary-detail-actions {
+  margin-left: auto; /* Esta é a "mágica" que empurra tudo para a direita */
+  display: flex; /* Alinha os botões de ação entre si */
+  gap: 0.5rem; /* Adiciona um pequeno espaço entre os botões de ação */
+}
+
+/* * BÔNUS: Estilos básicos para todos os .icon-btn para garantir uma boa aparência
+ * Caso você ainda não os tenha.
+*/
+.icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%; /* Deixa o fundo redondo no hover */
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.icon-btn:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-primary);
+}
