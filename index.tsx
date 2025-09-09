@@ -485,135 +485,91 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
 };
 
 const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, userProgress }) => {
-  // Estado para controlar se a barra lateral está aberta ou fechada
-  const [isSidebarOpen, setSidebarOpen] = useState(false);
   const isSearching = searchQuery.trim() !== '';
 
-  const handleSelectAndClose = (subject) => {
-    onSelectSubject(subject);
-    setSidebarOpen(false); // Fecha a sidebar após a seleção
-  };
-
   return (
-    <>
-      {/* A Sidebar agora vive aqui, mas só é visível quando 'isOpen' é true */}
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setSidebarOpen(false)} title={termName}>
-        {/* O conteúdo da sidebar é a própria grade de disciplinas */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-            {user.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
+    <div className="container dashboard">
+      <div className="dashboard-header">
+        <h1>{isSearching ? "Resultados da Busca" : "Início"}</h1>
+        <div className="header-actions">
+            <ThemeToggle theme={theme} toggleTheme={toggleTheme}/>
+            {userProgress.streak > 0 && <div className="streak-display">🔥 {userProgress.streak}</div>}
+            <button className="btn btn-secondary" onClick={onLogout}>Sair</button>
         </div>
-        <div className="subject-grid">
-          {subjects.map(subject => {
-            const subjectSummaries = searchResults.allSummaries.filter(s => s.subject_id === subject.id);
-            const completedCount = subjectSummaries.filter(s => userProgress.completedSummaries.includes(s.id)).length;
-            const progress = subjectSummaries.length > 0 ? (completedCount / subjectSummaries.length) * 100 : 0;
-            return (
-              <div key={subject.id} className="subject-card" style={{ backgroundColor: subject.color }} onClick={() => handleSelectAndClose(subject)}>
-                <div><h3>{subject.name}</h3></div>
-                <div className="subject-card-progress">
-                  <p>{completedCount} de {subjectSummaries.length} concluídos</p>
-                  <div className="progress-bar"><div className="progress-bar-inner" style={{ width: `${progress}%` }}></div></div>
-                </div>
-                {user.role === 'admin' && (
-                  <div className="card-actions">
-                    <IconButton onClick={(e) => onEditSubject(subject)}><EditIcon /></IconButton>
-                    <IconButton onClick={(e) => onDeleteSubject(subject.id)}><DeleteIcon /></IconButton>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </Sidebar>
-
-      <div className="container dashboard">
-        <div className="dashboard-header">
-          {/* O botão hamburger aparece aqui, mas só é visível no celular (via CSS) */}
-          <button className="hamburger-btn" onClick={() => setSidebarOpen(true)}>
-            <HamburgerIcon />
-          </button>
-          <h1>{isSearching ? "Resultados da Busca" : "Início"}</h1>
-          <div className="header-actions">
-              <ThemeToggle theme={theme} toggleTheme={toggleTheme}/>
-              {userProgress.streak > 0 && <div className="streak-display">🔥 {userProgress.streak}</div>}
-              <button className="btn btn-secondary" onClick={onLogout}>Sair</button>
-          </div>
-        </div>
-
-        <div className="search-bar-container">
-            <SearchIcon />
-            <input type="text" placeholder="Buscar disciplinas ou resumos..." className="search-input" value={searchQuery} onChange={onSearchChange}/>
-        </div>
-
-        {isSearching ? (
-          <div className="search-results">
-            {searchResults.subjects.length > 0 && <h3>Disciplinas</h3>}
-            <div className="subject-grid">
-                {searchResults.subjects.map(subject => (
-                  <div key={subject.id} className="subject-card" style={{ backgroundColor: subject.color }} onClick={() => handleSelectAndClose(subject)}>
-                      <h3>{subject.name}</h3>
-                      <p>{subject.summaryCount} resumos</p>
-                  </div>
-              ))}
-            </div>
-            {searchResults.summaries.length > 0 && <h3>Resumos</h3>}
-            <ul className="summary-list">
-                {searchResults.summaries.map(summary => (
-                    <li key={summary.id} className="summary-list-item" onClick={() => onSelectSummary(summary)}>
-                        <div className="summary-list-item-title">{summary.title}</div>
-                        <span className="summary-list-item-subject">{summary.subjectName}</span>
-                    </li>
-                ))}
-            </ul>
-          </div>
-        ) : (
-          <>
-            {lastViewed.length > 0 && (
-              <div className="last-viewed-section">
-                  <h2>Continue de Onde Parou</h2>
-                  <div className="last-viewed-grid">
-                      {lastViewed.map(summary => (
-                          <div key={summary.id} className="last-viewed-card" onClick={() => onSelectSummary(summary)}>
-                              <h4>{summary.title}</h4>
-                              <p>{summary.subjectName}</p>
-                          </div>
-                      ))}
-                  </div>
-              </div>
-            )}
-
-            {/* O contêiner para o botão foi renomeado para ser alvo do CSS de ocultar */}
-            <div className="add-subject-button-container" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
-                {user.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
-            </div>
-
-            {/* A grade de disciplinas original. Será OCULTA no celular pelo CSS. */}
-            <div className="subject-grid">
-              {subjects.map(subject => {
-                const subjectSummaries = searchResults.allSummaries.filter(s => s.subject_id === subject.id);
-                const completedCount = subjectSummaries.filter(s => userProgress.completedSummaries.includes(s.id)).length;
-                const progress = subjectSummaries.length > 0 ? (completedCount / subjectSummaries.length) * 100 : 0;
-                return (
-                  <div key={subject.id} className="subject-card" style={{ backgroundColor: subject.color }} onClick={() => onSelectSubject(subject)}>
-                    <div><h3>{subject.name}</h3></div>
-                    <div className="subject-card-progress">
-                      <p>{completedCount} de {subjectSummaries.length} concluídos</p>
-                      <div className="progress-bar"><div className="progress-bar-inner" style={{ width: `${progress}%` }}></div></div>
-                    </div>
-                    {user.role === 'admin' && (
-                      <div className="card-actions">
-                        <IconButton onClick={(e) => onEditSubject(subject)}><EditIcon /></IconButton>
-                        <IconButton onClick={(e) => onDeleteSubject(subject.id)}><DeleteIcon /></IconButton>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
       </div>
-    </>
+
+      <div className="search-bar-container">
+          <SearchIcon />
+          <input type="text" placeholder="Buscar disciplinas ou resumos..." className="search-input" value={searchQuery} onChange={onSearchChange}/>
+      </div>
+
+      {isSearching ? (
+        <div className="search-results">
+          {searchResults.subjects.length > 0 && <h3>Disciplinas</h3>}
+          <div className="subject-grid">
+              {searchResults.subjects.map(subject => (
+                <div key={subject.id} className="subject-card" style={{ backgroundColor: subject.color }} onClick={() => onSelectSubject(subject)}>
+                    <h3>{subject.name}</h3>
+                    <p>{subject.summaryCount} resumos</p>
+                </div>
+            ))}
+          </div>
+          {searchResults.summaries.length > 0 && <h3>Resumos</h3>}
+          <ul className="summary-list">
+              {searchResults.summaries.map(summary => (
+                  <li key={summary.id} className="summary-list-item" onClick={() => onSelectSummary(summary)}>
+                      <div className="summary-list-item-title">{summary.title}</div>
+                      <span className="summary-list-item-subject">{summary.subjectName}</span>
+                  </li>
+              ))}
+          </ul>
+        </div>
+      ) : (
+        <>
+          {lastViewed.length > 0 && (
+            <div className="last-viewed-section">
+                <h2>Continue de Onde Parou</h2>
+                <div className="last-viewed-grid">
+                    {lastViewed.map(summary => (
+                        <div key={summary.id} className="last-viewed-card" onClick={() => onSelectSummary(summary)}>
+                            <h4>{summary.title}</h4>
+                            <p>{summary.subjectName}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+          )}
+
+          <div className="add-subject-button-container" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
+              {user.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
+          </div>
+
+          {/* A grade de disciplinas agora será sempre visível e o CSS cuidará da responsividade */}
+          <div className="subject-grid">
+            {subjects.map(subject => {
+              const subjectSummaries = searchResults.allSummaries.filter(s => s.subject_id === subject.id);
+              const completedCount = subjectSummaries.filter(s => userProgress.completedSummaries.includes(s.id)).length;
+              const progress = subjectSummaries.length > 0 ? (completedCount / subjectSummaries.length) * 100 : 0;
+              return (
+                <div key={subject.id} className="subject-card" style={{ backgroundColor: subject.color }} onClick={() => onSelectSubject(subject)}>
+                  <div><h3>{subject.name}</h3></div>
+                  <div className="subject-card-progress">
+                    <p>{completedCount} de {subjectSummaries.length} concluídos</p>
+                    <div className="progress-bar"><div className="progress-bar-inner" style={{ width: `${progress}%` }}></div></div>
+                  </div>
+                  {user.role === 'admin' && (
+                    <div className="card-actions">
+                      <IconButton onClick={(e) => onEditSubject(subject)}><EditIcon /></IconButton>
+                      <IconButton onClick={(e) => onDeleteSubject(subject.id)}><DeleteIcon /></IconButton>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
   );
 };
 const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user, terms }) => {
@@ -988,6 +944,7 @@ const SpotifyPlayer = ({ url }) => {
 
 
 // MODIFICADO: Este é o componente com a nova funcionalidade
+// MODIFICADO: Este é o componente com a nova funcionalidade
 const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate }) => {
     const [activeTab, setActiveTab] = useState('summary');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -1004,7 +961,7 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
         setIsGenerating(true);
         await onGenerateQuiz();
         setIsGenerating(false);
-    }
+    };
 
     const availableTabs = [
         { id: 'summary', label: 'Resumo', condition: true },
@@ -1043,35 +1000,65 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
 
                 <nav className="tabs-nav">
                     {availableTabs.map(tab => (
-                        <button key={tab.id} className={`tab-button ${activeTab === tab.id ? 'active' : ''}`} onClick={() => setActiveTab(tab.id)} aria-controls={`tab-panel-${tab.id}`} role="tab">
+                        <button
+                            key={tab.id}
+                            className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
+                            onClick={() => setActiveTab(tab.id)}
+                            aria-controls={`tab-panel-${tab.id}`}
+                            role="tab"
+                        >
                             {tab.label}
                         </button>
                     ))}
                 </nav>
 
+                {/* --- ABA AGORA USA CSS PARA ESCONDER, NÃO DESMONTA --- */}
                 <div className="tab-content">
-                    {activeTab === 'summary' && (
-                        <div id="tab-panel-summary" role="tabpanel" className="summary-content" dangerouslySetInnerHTML={{ __html: summary.content }}></div>
-                    )}
-                    {activeTab === 'video' && <div id="tab-panel-video" role="tabpanel">{summary.video && <GoogleDrivePlayer url={summary.video} />}</div>}
-                    {activeTab === 'podcast' && <div id="tab-panel-podcast" role="tabpanel">{summary.audio && <SpotifyPlayer url={summary.audio} />}</div>}
-                    {activeTab === 'questions' && (
-                        <div id="tab-panel-questions" role="tabpanel">
-                             {summary.questions && summary.questions.length > 0 ? (
-                                <QuizView questions={summary.questions} onGetExplanation={onGetExplanation} />
-                            ) : (
-                                user.role === 'admin' && (
-                                    <div className="quiz-container empty-quiz">
-                                        <p>Ainda não há questões para este resumo.</p>
-                                        <button className="btn btn-primary" onClick={handleGenerateQuiz} disabled={isGenerating}>
-                                            {isGenerating && <span className="spinner-sm"></span>}
-                                            {isGenerating ? 'Gerando Quiz...' : 'Gerar Quiz com IA'}
-                                        </button>
-                                    </div>
-                                )
-                            )}
-                        </div>
-                    )}
+                    <div
+                        id="tab-panel-summary"
+                        role="tabpanel"
+                        className={`summary-content ${activeTab === 'summary' ? '' : 'hidden'}`}
+                        dangerouslySetInnerHTML={{ __html: summary.content }}
+                    />
+
+                    <div
+                        id="tab-panel-video"
+                        role="tabpanel"
+                        className={activeTab === 'video' ? '' : 'hidden'}
+                    >
+                        {summary.video && <GoogleDrivePlayer url={summary.video} />}
+                    </div>
+
+                    <div
+                        id="tab-panel-podcast"
+                        role="tabpanel"
+                        className={activeTab === 'podcast' ? '' : 'hidden'}
+                    >
+                        {summary.audio && <SpotifyPlayer url={summary.audio} />}
+                    </div>
+
+                    <div
+                        id="tab-panel-questions"
+                        role="tabpanel"
+                        className={activeTab === 'questions' ? '' : 'hidden'}
+                    >
+                        {summary.questions && summary.questions.length > 0 ? (
+                            <QuizView questions={summary.questions} onGetExplanation={onGetExplanation} />
+                        ) : (
+                            user.role === 'admin' && (
+                                <div className="quiz-container empty-quiz">
+                                    <p>Ainda não há questões para este resumo.</p>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={handleGenerateQuiz}
+                                        disabled={isGenerating}
+                                    >
+                                        {isGenerating ? 'Gerando Quiz...' : 'Gerar Quiz com IA'}
+                                    </button>
+                                </div>
+                            )
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
