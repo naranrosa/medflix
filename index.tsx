@@ -1340,7 +1340,7 @@ const App = () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
     try {
-        const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere um quiz. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
+        const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere um quiz com um enunciado com caso clinico, não podendo citar o resumo diretamente, mas abordar somente a materia do resumo. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
         const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json", responseSchema: quizSchema } });
         const parsedJson = JSON.parse(response.text.trim());
         const { error } = await supabase.from('summaries').update({ questions: parsedJson.questions }).eq('id', currentSummaryId);
