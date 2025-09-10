@@ -36,12 +36,13 @@ const enhancedContentSchema = {
     required: ['enhancedContent']
 };
 
+// --- [INÍCIO DA CORREÇÃO] SCHEMA DO QUIZ ATUALIZADO ---
 const quizSchema = {
   type: Type.OBJECT,
   properties: {
     questions: {
       type: Type.ARRAY,
-      description: 'Uma lista de exatamente 5 questões de múltipla escolha no padrão Intercampi.',
+      description: 'Uma lista de no mínimo 10 questões de múltipla escolha de alto nível, inspiradas em provas de residência médica, mesclando diferentes formatos complexos.',
       items: {
         type: Type.OBJECT,
         properties: {
@@ -63,6 +64,7 @@ const quizSchema = {
   },
   required: ['questions']
 };
+// --- [FIM DA CORREÇÃO] SCHEMA DO QUIZ ATUALIZADO ---
 
 
 const quizExplanationSchema = {
@@ -344,11 +346,13 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
             `.trim();
 
             setLoadingMessage('Atualizando o resumo com as novas informações...');
-            const updatePrompt = `Você é um especialista em redação médica.
-            Sua tarefa é atualizar o resumo abaixo com as novas informações da aula,
-            integrando de forma coesa, melhorando clareza e mantendo formato HTML.
 
-            Resumo Atual (HTML):
+            const updatePrompt = `Você é um especialista em redação médica.
+            Sua tarefa é ATUALIZAR e MELHORAR o resumo existente, integrando as novas informações fornecidas.
+
+            **REGRA CRÍTICA: NENHUMA INFORMAÇÃO do "Resumo Atual" deve ser removida ou perdida.** O conteúdo original deve ser 100% preservado. Você deve apenas adicionar as novas informações de forma coesa e, se possível, melhorar a clareza do texto já existente sem alterar seu significado ou remover conteúdo.
+
+            Resumo Atual (HTML) - PRESERVE TODO ESTE CONTEÚDO:
             \`\`\`html
             ${summary.content}
             \`\`\`
@@ -356,7 +360,7 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
             Novas informações para adicionar/integrar:
             "${newInformation}"
 
-            Forneça o resumo atualizado completo em HTML.`;
+            Forneça o resumo completo e atualizado em formato HTML, garantindo que todo o conteúdo original foi mantido e o novo conteúdo foi integrado.`;
 
             const response = await ai.models.generateContent({
                 model: model,
@@ -1702,29 +1706,73 @@ const App = () => {
       setAIUpdateModalOpen(false);
   };
 
+  // --- [INÍCIO DA CORREÇÃO] FUNÇÃO DE GERAR QUIZ ATUALIZADA ---
   const handleGenerateQuiz = async () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
-    try {
-        const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere um quiz de 5 questões. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
-        const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json", responseSchema: quizSchema } });
-        const parsedJson = JSON.parse(response.text.trim());
 
-        const { data, error } = await supabase.from('summaries')
-            .update({ questions: parsedJson.questions })
-            .eq('id', currentSummaryId)
-            .select()
-            .single();
+    const maxRetries = 3;
+    let currentTry = 0;
+    let delay = 1000;
 
-        if (error) throw error;
+    while (currentTry < maxRetries) {
+        try {
+            console.log(`Tentativa ${currentTry + 1} de gerar o quiz...`);
 
-        setSummaries(summaries.map(s => s.id === currentSummaryId ? data : s));
+            const prompt = `
+            Você é um especialista em criar questões para provas de residência médica. Sua tarefa é gerar um quiz de no mínimo 10 questões de alta complexidade e dificuldade, baseado no resumo fornecido sobre "${summary.title}", que avaliem de forma abrangente e profunda todo o conteúdo.
 
-    } catch (e) {
-        console.error("Erro ao gerar/salvar quiz:", e);
-        alert("Falha ao gerar o quiz. Tente novamente.");
+            Instruções de Geração:
+            Você DEVE mesclar os seguintes estilos de questão para criar um teste variado e desafiador:
+            1.  **Questões Conceituais/Clínicas:** Perguntas que exijam raciocínio clínico, interpretação de cenários e não apenas memorização.
+            2.  **Múltiplas Afirmativas:** Questões no formato "Analise as afirmativas a seguir" (I, II, III, IV), onde o aluno deve assinalar a alternativa que indica quais estão corretas (ex: "Apenas I e III estão corretas").
+            3.  **Asserção-Razão:** Questões com duas afirmativas (uma asserção e uma razão) ligadas por "PORQUE". As alternativas devem seguir o padrão:
+                - "As duas afirmativas são verdadeiras, e a segunda justifica a primeira."
+                - "As duas afirmativas são verdadeiras, mas a segunda não justifica a primeira."
+                - "A primeira afirmativa é verdadeira, e a segunda é falsa."
+                - "A primeira afirmativa é falsa, e a segunda é verdadeira."
+                - "As duas afirmativas são falsas."
+
+            Certifique-se de cobrir diferentes partes do resumo para garantir uma avaliação completa.
+
+            Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".
+            `;
+
+            const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json", responseSchema: quizSchema } });
+            const parsedJson = JSON.parse(response.text.trim());
+
+            const { data, error } = await supabase.from('summaries')
+                .update({ questions: parsedJson.questions })
+                .eq('id', currentSummaryId)
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            setSummaries(summaries.map(s => s.id === currentSummaryId ? data : s));
+
+            console.log("Quiz gerado e salvo com sucesso!");
+            return;
+
+        } catch (e) {
+            currentTry++;
+            console.error(`Erro na tentativa ${currentTry}:`, e);
+
+            const isOverloadedError = e.message && e.message.includes('503');
+
+            if (isOverloadedError && currentTry < maxRetries) {
+                console.log(`Modelo sobrecarregado. Tentando novamente em ${delay / 1000} segundos...`);
+                await new Promise(res => setTimeout(res, delay));
+                delay *= 2;
+            } else {
+                console.error("Erro final ao gerar/salvar quiz:", e);
+                alert("Falha ao gerar o quiz. O serviço pode estar ocupado ou ocorreu outro erro. Tente novamente mais tarde.");
+                break;
+            }
+        }
     }
   };
+  // --- [FIM DA CORREÇÃO] FUNÇÃO DE GERAR QUIZ ATUALIZADA ---
 
   const handleGenerateFlashcards = async () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
