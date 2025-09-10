@@ -81,7 +81,7 @@ const flashcardsSchema = {
   properties: {
     flashcards: {
       type: Type.ARRAY,
-      description: 'Uma lista de flashcards com frente e verso.',
+      description: 'gerar flashcards claros e objetivos a partir dele, organizados em formato de pergunta e resposta, sem incluir valores de exames laboratoriais ou dados numéricos específicos, priorizando conceitos, definições, mecanismos, causas, consequências, classificações e relações clínicas relevantes, de forma que cada flashcard seja curto, direto e facilite a memorização rápida, tendo uma lista de flashcards com frente e verso, .',
       items: {
         type: Type.OBJECT,
         properties: {
@@ -485,49 +485,6 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
                     <div className="loader-container">
                         <div className="loader"></div>
                         <p>{loadingMessage}</p>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-const AIGenerateFlashcardsModal = ({ onClose, onGenerate, isGenerating }) => {
-    const [quantity, setQuantity] = useState('10');
-
-    const handleGenerateClick = () => {
-        const numQuantity = parseInt(quantity, 10) || 10;
-        onGenerate(numQuantity);
-    };
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                {!isGenerating ? (
-                    <>
-                        <h2>Gerar Flashcards com IA</h2>
-                        <p>Escolha quantos flashcards você deseja criar a partir do conteúdo deste resumo.</p>
-                        <div className="form-group">
-                            <label htmlFor="quantity-input">Quantidade de Flashcards</label>
-                            <input
-                                id="quantity-input"
-                                className="input"
-                                type="number"
-                                value={quantity}
-                                onChange={(e) => setQuantity(e.target.value)}
-                                min="1"
-                                max="20"
-                            />
-                        </div>
-                        <div className="modal-actions">
-                            <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-                            <button className="btn btn-primary" onClick={handleGenerateClick}>Gerar</button>
-                        </div>
-                    </>
-                ) : (
-                    <div className="loader-container">
-                        <div className="loader"></div>
-                        <p>Gerando flashcards, isso pode levar um momento...</p>
                     </div>
                 )}
             </div>
@@ -1314,7 +1271,6 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
     const [activeTab, setActiveTab] = useState('summary');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isTocVisible, setIsTocVisible] = useState(true);
-    const [isFlashcardModalOpen, setFlashcardModalOpen] = useState(false);
 
     useEffect(() => {
         setActiveTab('summary');
@@ -1327,11 +1283,10 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
         setIsGenerating(false);
     };
 
-    const handleGenerateFlashcards = async (quantity) => {
+    const handleGenerateFlashcards = async () => {
         setIsGenerating(true);
-        await onGenerateFlashcards(quantity);
+        await onGenerateFlashcards();
         setIsGenerating(false);
-        setFlashcardModalOpen(false);
     }
 
     const availableTabs = [
@@ -1410,10 +1365,10 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                                     <p>Ainda não há flashcards para este resumo.</p>
                                     <button
                                         className="btn btn-primary"
-                                        onClick={() => setFlashcardModalOpen(true)}
+                                        onClick={handleGenerateFlashcards}
                                         disabled={isGenerating}
                                     >
-                                        {isGenerating ? 'Gerando...' : 'Gerar Flashcards com IA'}
+                                        {isGenerating ? 'Gerando Flashcards...' : 'Gerar Flashcards com IA'}
                                     </button>
                                 </div>
                             )
@@ -1444,13 +1399,6 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                     </div>
                 </div>
             </div>
-             {isFlashcardModalOpen && (
-                <AIGenerateFlashcardsModal
-                    onClose={() => setFlashcardModalOpen(false)}
-                    onGenerate={handleGenerateFlashcards}
-                    isGenerating={isGenerating}
-                />
-            )}
             <ChatbotWidget summary={summary} />
         </div>
     );
@@ -1778,11 +1726,11 @@ const App = () => {
     }
   };
 
-  const handleGenerateFlashcards = async (quantity) => {
+  const handleGenerateFlashcards = async () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
     try {
-        const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere exatamente ${quantity} flashcards. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
+        const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere o número ideal de flashcards necessários para revisar completamente todo o conteúdo. O objetivo é cobrir todos os conceitos, definições, mecanismos, causas, consequências e classificações importantes, de forma que cada flashcard seja curto e direto para facilitar a memorização. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
         const response = await ai.models.generateContent({
             model,
             contents: prompt,
