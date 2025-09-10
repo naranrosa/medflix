@@ -541,114 +541,209 @@ const AIGenerateFlashcardsModal = ({ onClose, onGenerate, isGenerating }) => {
     );
 };
 
-// --- [INÍCIO] COMPONENTE CHATBOT WIDGET ATUALIZADO ---
+// --- [INÍCIO] COMPONENTE CHATBOT WIDGET FINAL E CORRIGIDO ---
 const ChatbotWidget = ({ summary }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([]);
     const [inputValue, setInputValue] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+    const [isTyping, setIsTyping] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
     const [isListening, setIsListening] = useState(false);
-    const chatboxRef = useRef(null);
 
-    // Rola para a última mensagem
+    const [conversationState, setConversationState] = useState('idle');
+    const [specialistName, setSpecialistName] = useState('');
+    const [hasFoundSpecialist, setHasFoundSpecialist] = useState(false);
+
+    const chatboxRef = useRef(null);
+    const specialistNames = ['Alex', 'Bia', 'Carlos', 'Diana', 'Leo', 'Sofia'];
+
     useEffect(() => {
         if (chatboxRef.current) {
             chatboxRef.current.scrollTop = chatboxRef.current.scrollHeight;
         }
-    }, [messages]);
+    }, [messages, isTyping]);
 
-    // Função para converter o markdown simples em HTML
-    const formatMessageText = (text) => {
-        // Converte **negrito** para <strong>negrito</strong>
-        const boldFormatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        // Converte quebras de linha em tags <br> para manter a formatação
-        return boldFormatted.replace(/\n/g, '<br />');
+    useEffect(() => {
+        if (isOpen && conversationState === 'idle') {
+            setMessages([]);
+            setInputValue('');
+            setHasFoundSpecialist(false);
+            setIsProcessing(false);
+            setIsTyping(false);
+
+            setConversationState('greeting');
+            const welcomeMessage = { sender: 'ai', text: `Olá! Sou o assistente Medflix e estou aqui para ajudar com suas dúvidas sobre **"${summary.title}"**.` };
+            const questionMessage = { sender: 'ai', text: `Pode me dizer qual é a sua dúvida?` };
+
+            setMessages([welcomeMessage]);
+            setTimeout(() => {
+                setMessages(prev => [...prev, questionMessage]);
+                setConversationState('active');
+            }, 1500);
+
+        } else if (!isOpen) {
+            setConversationState('idle');
+        }
+    }, [isOpen]);
+
+    const streamMessage = (messageParts, onComplete = () => {}) => {
+        if (!messageParts || messageParts.length === 0) {
+            onComplete();
+            return;
+        }
+
+        let currentPart = 0;
+
+        const sendNextPart = () => {
+            setMessages(prev => [...prev, { sender: 'ai', text: messageParts[currentPart] }]);
+            currentPart++;
+
+            if (currentPart < messageParts.length) {
+                setIsTyping(true);
+                setTimeout(() => {
+                    setIsTyping(false);
+                    setTimeout(sendNextPart, 50);
+                }, 10000);
+            } else {
+                onComplete();
+            }
+        };
+        setTimeout(sendNextPart, 1500);
     };
 
-    // Gera o contexto para a IA, focado em um único resumo
     const generateContext = () => {
-        let context = `Você é um tutor amigável e acessível, um super especialista no conteúdo do resumo sobre "${summary.title}".\n`;
-        context += "Sua tarefa é responder às dúvidas dos estudantes de forma clara, direta e encorajadora, usando o material de estudo abaixo como sua única fonte de conhecimento.\n\n";
+        let context = `Você é um tutor especialista chamado **${specialistName}**, expert no conteúdo do resumo sobre "${summary.title}".\n`;
+        context += "Sua tarefa é responder às dúvidas de um estudante de forma clara e didática. Quebre suas respostas em parágrafos curtos e coesos (2-3 sentenças). Separe cada parágrafo com uma quebra de linha dupla.\n\n";
         context += "--- MATERIAL DE ESTUDO ---\n";
-        context += `\n**Resumo: ${summary.title}**\n`;
-        context += `${summary.content.replace(/<[^>]*>?/gm, ' ')}\n`; // Remove HTML
-
-        if (summary.questions && summary.questions.length > 0) {
-            context += "\n*Questões relacionadas:*\n";
-            summary.questions.forEach(q => {
-                context += `- ${q.questionText}\n  Resposta Correta: ${q.alternatives[q.correctAlternativeIndex]}\n`;
-            });
-        }
-        if (summary.flashcards && summary.flashcards.length > 0) {
-            context += "\n*Flashcards relacionados:*\n";
-            summary.flashcards.forEach(f => {
-                context += `- Pergunta: ${f.front}\n  Resposta: ${f.back}\n`;
-            });
-        }
+        context += `${summary.content.replace(/<[^>]*>?/gm, ' ')}\n`;
         context += "\n--- FIM DO MATERIAL ---\n\n";
         return context;
     };
 
     const handleSendMessage = async (text) => {
-        if (!text.trim()) return;
-
-        // Verifica se é a primeira interação do usuário na conversa atual
-        const isFirstInteraction = messages.length === 0;
+        if (!text.trim() || isProcessing) return;
 
         const userMessage = { sender: 'user', text };
         setMessages(prev => [...prev, userMessage]);
         setInputValue('');
-        setIsLoading(true);
+        setIsProcessing(true);
 
-        try {
-            const context = generateContext();
+        const endPhrases = ['obrigado', 'obrigada', 'valeu', 'tchau', 'era só isso'];
+        if (endPhrases.some(phrase => text.toLowerCase().includes(phrase))) {
+            setConversationState('ending');
+            const endMessages = [
+                `De nada! Se precisar de mais alguma coisa, é só chamar.`,
+                `Estou finalizando nosso atendimento. O histórico desta conversa será excluído para sua privacidade.`
+            ];
+            streamMessage(endMessages, () => {
+                setIsProcessing(false);
+                setIsTyping(false);
+                setTimeout(() => {
+                    setIsOpen(false);
+                    setConversationState('idle');
+                }, 5000);
+            });
+            return;
+        }
 
-            // ALTERAÇÃO: A instrução para a IA muda com base no andamento da conversa.
-            const instruction = isFirstInteraction
-                ? `Responda à dúvida do aluno de forma curtissma e direta:`
-                : `O aluno está buscando uma resposta rapida na conversa. Responda à dúvida dele de forma mais curta e eficaz:`;
+        // CORREÇÃO: Função única para limpar todos os estados de "carregando"
+        const onStreamComplete = () => {
+            setIsProcessing(false);
+            setIsTyping(false);
+        };
 
-            const prompt = `${context}Dúvida do aluno: "${text}"\n\n${instruction}`;
+        if (!hasFoundSpecialist) {
+            const findingMessage = { sender: 'ai', text: 'Entendido. Vou conectar você com um especialista no assunto, só um momento.' };
+            setMessages(prev => [...prev, findingMessage]);
+            setConversationState('finding_specialist');
 
-            const response = await ai.models.generateContent({ model, contents: prompt });
-            const aiResponse = response.text.trim();
-            const aiMessage = { sender: 'ai', text: aiResponse };
-            setMessages(prev => [...prev, aiMessage]);
+            setTimeout(async () => {
+                try {
+                    const randomName = specialistNames[Math.floor(Math.random() * specialistNames.length)];
+                    setSpecialistName(randomName);
+                    setHasFoundSpecialist(true);
+                    setConversationState('active');
 
-        } catch (error) {
-            console.error("Erro ao chamar a IA:", error);
-            const errorMessage = { sender: 'ai', text: 'Desculpe, não consegui processar sua pergunta. Tente novamente.' };
-            setMessages(prev => [...prev, errorMessage]);
-        } finally {
-            setIsLoading(false);
+                    // CORREÇÃO: A introdução com o nome é adicionada manualmente aqui, garantindo que sempre apareça.
+                    const introductionMessage = { sender: 'ai', text: `Olá! Eu sou **${randomName}**, seu tutor especialista em ${summary.title}.` };
+                    setMessages(prev => [...prev, introductionMessage]);
+
+                    const context = generateContext();
+                    // O prompt agora pede para a IA responder DIRETAMENTE, sem se apresentar.
+                    const prompt = `${context}O estudante perguntou: "${text}"\n\nInstrução: Responda diretamente à pergunta, sem introduções, seguindo as regras de formatação de parágrafos.`;
+
+                    const response = await ai.models.generateContent({ model, contents: prompt });
+                    const aiResponse = (response?.text || '').trim();
+                    const responseParts = aiResponse.split('\n\n').filter(part => part.trim() !== '');
+
+                    // Se a IA gerou uma resposta, transmite-a. Senão, apenas finaliza o "carregando".
+                    if (responseParts.length > 0) {
+                        streamMessage(responseParts, onStreamComplete);
+                    } else {
+                        onStreamComplete();
+                    }
+
+                } catch (error) {
+                    handleError();
+                }
+
+            }, 10000);
+
+        } else {
+            try {
+                const context = generateContext();
+                const prompt = `${context}O estudante continuou a conversa com: "${text}"\n\nInstrução: Responda diretamente.`;
+                const response = await ai.models.generateContent({ model, contents: prompt });
+                const aiResponse = (response?.text || '').trim();
+
+                const responseParts = aiResponse.split('\n\n').filter(part => part.trim() !== '');
+
+                if (responseParts.length > 0) {
+                    streamMessage(responseParts, onStreamComplete);
+                } else {
+                    onStreamComplete();
+                }
+            } catch (error) {
+                handleError();
+            }
         }
     };
 
+    const handleError = () => {
+        console.error("Erro ao chamar a IA:");
+        const errorMessage = { sender: 'ai', text: 'Desculpe, não consegui processar sua pergunta. Tente novamente.' };
+        setMessages(prev => [...prev, errorMessage]);
+        setIsProcessing(false);
+        setConversationState('active');
+    };
+
+    const formatMessageText = (text) => {
+        if (typeof text !== 'string') {
+            return '';
+        }
+        return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />');
+    };
+
     const handleAudioInput = () => {
-        // Checa a compatibilidade do navegador com a API de Reconhecimento de Voz
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             alert('Seu navegador não suporta reconhecimento de voz.');
             return;
         }
-
         const recognition = new SpeechRecognition();
         recognition.lang = 'pt-BR';
         recognition.interimResults = false;
-
         recognition.onstart = () => setIsListening(true);
         recognition.onend = () => setIsListening(false);
         recognition.onerror = (event) => {
             console.error('Erro no reconhecimento de voz:', event.error);
             setIsListening(false);
         };
-
         recognition.onresult = (event) => {
             const transcript = event.results[0][0].transcript;
-            setInputValue(transcript); // Preenche o input
-            handleSendMessage(transcript); // E já envia a mensagem
+            setInputValue(transcript);
+            handleSendMessage(transcript);
         };
-
         recognition.start();
     };
 
@@ -664,7 +759,7 @@ const ChatbotWidget = ({ summary }) => {
     return (
         <div className="chatbot-widget">
             <div className="chatbot-header">
-                <h3>Especialista em {summary.title}</h3>
+                <h3>{hasFoundSpecialist ? `Especialista ${specialistName}` : `Assistente Medflix`}</h3>
                 <IconButton onClick={() => setIsOpen(false)}><CloseIcon /></IconButton>
             </div>
             <div className="chatbot-messages" ref={chatboxRef}>
@@ -673,10 +768,15 @@ const ChatbotWidget = ({ summary }) => {
                         key={index}
                         className={`message-bubble ${msg.sender}`}
                         dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text) }}
-                    >
-                    </div>
+                    ></div>
                 ))}
-                {isLoading && <div className="message-bubble ai"><div className="loader-sm"></div></div>}
+                {conversationState === 'finding_specialist' && (
+                     <div className="loader-container full-chat">
+                        <div className="loader"></div>
+                        <p>Buscando especialista na área...</p>
+                    </div>
+                )}
+                {isTyping && <div className="message-bubble ai"><div className="typing-indicator"><span></span><span></span><span></span></div></div>}
             </div>
             <div className="chatbot-input-area">
                 <textarea
@@ -684,21 +784,17 @@ const ChatbotWidget = ({ summary }) => {
                     onChange={(e) => setInputValue(e.target.value)}
                     placeholder={isListening ? 'Ouvindo...' : 'Digite sua dúvida...'}
                     onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSendMessage(inputValue);
-                        }
+                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(inputValue); }
                     }}
-                    disabled={isLoading || isListening}
+                    disabled={isProcessing || isListening || conversationState !== 'active'}
                 />
-                <IconButton onClick={() => handleSendMessage(inputValue)} disabled={isLoading || isListening}><SendIcon /></IconButton>
-                <IconButton onClick={handleAudioInput} className={isListening ? 'listening' : ''} disabled={isLoading}><MicIcon /></IconButton>
+                <IconButton onClick={() => handleSendMessage(inputValue)} disabled={isProcessing || isListening || conversationState !== 'active'}><SendIcon /></IconButton>
+                <IconButton onClick={handleAudioInput} className={isListening ? 'listening' : ''} disabled={isProcessing || conversationState !== 'active'}><MicIcon /></IconButton>
             </div>
         </div>
     );
 };
-// --- [FIM] COMPONENTE CHATBOT WIDGET ATUALIZADO ---
-
+// --- [FIM] COMPONENTE CHATBOT WIDGET FINAL E CORRIGIDO ---
 
 const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, userProgress }) => {
   const isSearching = searchQuery.trim() !== '';
