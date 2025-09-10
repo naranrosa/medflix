@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient, Session } from '@supabase/supabase-js';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 // --- CONFIGURAÇÃO DO SUPABASE ---
 // Cole suas credenciais do Supabase aqui
@@ -735,7 +736,15 @@ const SummaryModal = ({ isOpen, onClose, onSave, summary, subjectId }) => {
     );
 };
 
-const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, onEditSummary, onDeleteSummary, user, userProgress, onAIEnhance }) => {
+const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, onEditSummary, onDeleteSummary, user, userProgress, onAIEnhance, onReorderSummaries }) => {
+    const handleDragEnd = (result) => {
+        const { destination, source } = result;
+        if (!destination || (destination.droppableId === source.droppableId && destination.index === source.index)) {
+            return;
+        }
+        onReorderSummaries(source.index, destination.index);
+    };
+
     return (
         <div className="container summary-list-view">
             <div className="dashboard-header">
@@ -753,25 +762,42 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
             </div>
 
             {summaries.length > 0 ? (
-                <ul className="summary-list">
-                    {summaries.map(summary => {
-                        const isCompleted = userProgress.completedSummaries.includes(summary.id);
-                        return (
-                            <li key={summary.id} className="summary-list-item">
-                                <div className="summary-list-item-title" onClick={() => onSelectSummary(summary)}>
-                                    {isCompleted && <span className="completion-check"><CheckCircleIcon /></span>}
-                                    {summary.title}
-                                </div>
-                                {user.role === 'admin' && (
-                                    <div className="summary-list-item-actions">
-                                        <IconButton onClick={() => onEditSummary(summary)}><EditIcon/></IconButton>
-                                        <IconButton onClick={() => onDeleteSummary(summary.id)}><DeleteIcon/></IconButton>
-                                    </div>
-                                )}
-                            </li>
-                        );
-                    })}
-                </ul>
+                <DragDropContext onDragEnd={handleDragEnd}>
+                    <Droppable droppableId="summaries-list">
+                        {(provided) => (
+                            <ul className="summary-list" {...provided.droppableProps} ref={provided.innerRef}>
+                                {summaries.map((summary, index) => {
+                                    const isCompleted = userProgress.completedSummaries.includes(summary.id);
+                                    return (
+                                        <Draggable key={summary.id} draggableId={String(summary.id)} index={index} isDragDisabled={user.role !== 'admin'}>
+                                            {(provided, snapshot) => (
+                                                <li
+                                                    ref={provided.innerRef}
+                                                    {...provided.draggableProps}
+                                                    {...provided.dragHandleProps}
+                                                    className={`summary-list-item ${snapshot.isDragging ? 'is-dragging' : ''}`}
+                                                    style={{ ...provided.draggableProps.style }}
+                                                >
+                                                    <div className="summary-list-item-title" onClick={() => onSelectSummary(summary)}>
+                                                        {isCompleted && <span className="completion-check"><CheckCircleIcon /></span>}
+                                                        {summary.title}
+                                                    </div>
+                                                    {user.role === 'admin' && (
+                                                        <div className="summary-list-item-actions">
+                                                            <IconButton onClick={() => onEditSummary(summary)}><EditIcon/></IconButton>
+                                                            <IconButton onClick={() => onDeleteSummary(summary.id)}><DeleteIcon/></IconButton>
+                                                        </div>
+                                                    )}
+                                                </li>
+                                            )}
+                                        </Draggable>
+                                    );
+                                })}
+                                {provided.placeholder}
+                            </ul>
+                        )}
+                    </Droppable>
+                </DragDropContext>
             ) : (
                 <div className="empty-state">
                     <h2>Nenhum resumo aqui ainda</h2>
@@ -1280,7 +1306,8 @@ const App = () => {
             const { data: subjectsData } = await supabase.from('subjects').select('*').eq('term_id', fullUser.term_id);
             setSubjects(subjectsData || []);
 
-            const { data: summariesData } = await supabase.from('summaries').select('*');
+            // ATUALIZAÇÃO: Busca resumos ordenando pela coluna 'position'
+            const { data: summariesData } = await supabase.from('summaries').select('*').order('position', { ascending: true });
 
             const parseJsonField = (field, fallback = []) => {
                 if (typeof field === 'string') {
@@ -1406,24 +1433,39 @@ const App = () => {
   };
 
   const handleSaveSummary = async (summaryData) => {
+    const isNewSummary = !summaryData.id;
+    const summariesForSubject = summaries.filter(s => s.subject_id === summaryData.subject_id);
+
     const summaryPayload = {
         title: summaryData.title,
         content: summaryData.content,
         video: summaryData.video,
         subject_id: summaryData.subject_id,
-        user_id: session.user.id
+        user_id: session.user.id,
+        // ATUALIZAÇÃO: Define a posição para novos resumos
+        position: isNewSummary ? summariesForSubject.length : summaryData.position,
     };
-    if (summaryData.id) {
+
+    if (!isNewSummary) {
+        // Editando um resumo existente
         const { data, error } = await supabase.from('summaries')
             .update({ title: summaryData.title, content: summaryData.content, video: summaryData.video })
             .eq('id', summaryData.id)
-            .select();
-        if (error) alert(error.message);
-        else if (data) setSummaries(summaries.map(s => s.id === data[0].id ? data[0] : s));
+            .select()
+            .single(); // Usar single() para obter um objeto
+        if (error) {
+            alert(error.message);
+        } else if (data) {
+            setSummaries(summaries.map(s => s.id === data.id ? data : s));
+        }
     } else {
-        const { data, error } = await supabase.from('summaries').insert(summaryPayload).select();
-        if (error) alert(error.message);
-        else if (data) setSummaries([...summaries, data[0]]);
+        // Criando um novo resumo
+        const { data, error } = await supabase.from('summaries').insert(summaryPayload).select().single();
+        if (error) {
+            alert(error.message);
+        } else if (data) {
+            setSummaries([...summaries, data]);
+        }
     }
     setSummaryModalOpen(false);
     setEditingSummary(null);
@@ -1445,6 +1487,39 @@ const App = () => {
       if (error) alert(error.message);
       else if (data) setSummaries(summaries.map(s => s.id === data[0].id ? data[0] : s));
       setAIUpdateModalOpen(false);
+  };
+
+  // NOVA FUNÇÃO: Para reordenar e salvar a nova ordem no DB
+  const handleReorderSummaries = async (startIndex, endIndex) => {
+    // Filtra os resumos apenas da disciplina atual
+    const currentSubjectSummaries = summaries
+      .filter(s => s.subject_id === currentSubjectId)
+      .sort((a, b) => a.position - b.position);
+
+    // Reordena a lista localmente
+    const [removed] = currentSubjectSummaries.splice(startIndex, 1);
+    currentSubjectSummaries.splice(endIndex, 0, removed);
+
+    // Atualiza o estado global de resumos para refletir a mudança imediatamente na UI
+    const otherSummaries = summaries.filter(s => s.subject_id !== currentSubjectId);
+    const updatedSummariesForState = currentSubjectSummaries.map((s, index) => ({ ...s, position: index }));
+    setSummaries([...otherSummaries, ...updatedSummariesForState]);
+
+
+    // Prepara as atualizações para o Supabase
+    const updates = updatedSummariesForState.map((summary, index) =>
+        supabase
+            .from('summaries')
+            .update({ position: index })
+            .eq('id', summary.id)
+    );
+
+    // Executa todas as atualizações
+    const { error } = await Promise.all(updates);
+    if (error) {
+        alert("Não foi possível salvar a nova ordem. Por favor, tente novamente.");
+        // Opcional: reverter o estado local em caso de erro
+    }
   };
 
   const handleGenerateQuiz = async () => {
@@ -1568,7 +1643,14 @@ const App = () => {
 
   const currentSubject = subjects.find(s => s.id === currentSubjectId);
   const currentSummary = summaries.find(s => s.id === currentSummaryId);
-  const summariesForCurrentSubject = summaries.filter(s => s.subject_id === currentSubjectId);
+
+  // ATUALIZAÇÃO: Garante que os resumos passados para a view estejam sempre ordenados
+  const summariesForCurrentSubject = useMemo(() =>
+  summaries
+      .filter(s => s.subject_id === currentSubjectId)
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+  [summaries, currentSubjectId]);
+
 
   const searchResults = useMemo(() => {
     const allSummariesWithSubject = summaries.map(sum => ({ ...sum, subjectName: subjects.find(sub => sub.id === sum.subject_id)?.name || '' }));
@@ -1600,7 +1682,7 @@ const App = () => {
         const termName = terms.find(t => t.id === user.term_id)?.name || "Meu Período";
         return <Dashboard user={user} termName={termName} onLogout={handleLogout} subjects={subjects} onSelectSubject={handleSelectSubject} onAddSubject={() => { setEditingSubject(null); setSubjectModalOpen(true); }} onEditSubject={(subject) => { setEditingSubject(subject); setSubjectModalOpen(true); }} onDeleteSubject={handleDeleteSubject} theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} searchQuery={searchQuery} onSearchChange={(e) => setSearchQuery(e.target.value)} searchResults={searchResults} onSelectSummary={handleSelectSummary} lastViewed={lastViewedWithDetails} userProgress={userProgress} />;
       case 'subject':
-        return <SummaryListView subject={currentSubject} summaries={summariesForCurrentSubject} onSelectSummary={handleSelectSummary} onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }} onEditSummary={(summary) => { setEditingSummary(summary); setSummaryModalOpen(true); }} onDeleteSummary={handleDeleteSummary} user={user} userProgress={userProgress} onAIEnhance={() => setAIEnhanceModalOpen(true)} />;
+        return <SummaryListView subject={currentSubject} summaries={summariesForCurrentSubject} onSelectSummary={handleSelectSummary} onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }} onEditSummary={(summary) => { setEditingSummary(summary); setSummaryModalOpen(true); }} onDeleteSummary={handleDeleteSummary} user={user} userProgress={userProgress} onAIEnhance={() => setAIEnhanceModalOpen(true)} onReorderSummaries={handleReorderSummaries} />;
       case 'summary':
         return <SummaryDetailView summary={currentSummary} onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }} onDelete={() => handleDeleteSummary(currentSummary.id)} onGenerateQuiz={handleGenerateQuiz} onToggleComplete={handleToggleComplete} isCompleted={userProgress.completedSummaries.includes(currentSummary.id)} onGetExplanation={handleGetExplanation} user={user} onAIUpdate={() => setAIUpdateModalOpen(true)} onGenerateFlashcards={handleGenerateFlashcards} />;
       default:
