@@ -587,27 +587,32 @@ const ChatbotWidget = ({ summary }) => {
     }, [isOpen]);
 
     const streamMessage = (messageParts, onComplete = () => {}) => {
-        if (!messageParts || messageParts.length === 0) {
-            onComplete();
-            return;
-        }
+    if (!messageParts || messageParts.length === 0) {
+        onComplete();
+        return;
+    }
 
-        let currentPart = 0;
+    let currentPart = 0;
 
-        const sendNextPart = () => {
+    const sendNextPart = () => {
+            // Exibe a parte atual da mensagem.
             setMessages(prev => [...prev, { sender: 'ai', text: messageParts[currentPart] }]);
             currentPart++;
 
+            // Se houver mais partes para exibir...
             if (currentPart < messageParts.length) {
+                // ...ativa o indicador de digitação e agenda a próxima parte para daqui a 10 segundos.
                 setIsTyping(true);
-                setTimeout(() => {
-                    setIsTyping(false);
-                    setTimeout(sendNextPart, 50);
-                }, 10000);
+                setTimeout(sendNextPart, 10000); // Mantém o requisito de 10 segundos.
             } else {
+                // Esta era a última parte da mensagem.
+                // Desativa explicitamente o indicador de digitação e finaliza.
+                setIsTyping(false);
                 onComplete();
             }
         };
+
+        // Inicia o processo após um breve intervalo inicial.
         setTimeout(sendNextPart, 1500);
     };
 
@@ -646,7 +651,6 @@ const ChatbotWidget = ({ summary }) => {
             return;
         }
 
-        // CORREÇÃO: Função única para limpar todos os estados de "carregando"
         const onStreamComplete = () => {
             setIsProcessing(false);
             setIsTyping(false);
@@ -664,19 +668,19 @@ const ChatbotWidget = ({ summary }) => {
                     setHasFoundSpecialist(true);
                     setConversationState('active');
 
-                    // CORREÇÃO: A introdução com o nome é adicionada manualmente aqui, garantindo que sempre apareça.
                     const introductionMessage = { sender: 'ai', text: `Olá! Eu sou **${randomName}**, seu tutor especialista em ${summary.title}.` };
                     setMessages(prev => [...prev, introductionMessage]);
 
                     const context = generateContext();
-                    // O prompt agora pede para a IA responder DIRETAMENTE, sem se apresentar.
                     const prompt = `${context}O estudante perguntou: "${text}"\n\nInstrução: Responda diretamente à pergunta, sem introduções, seguindo as regras de formatação de parágrafos.`;
 
                     const response = await ai.models.generateContent({ model, contents: prompt });
                     const aiResponse = (response?.text || '').trim();
-                    const responseParts = aiResponse.split('\n\n').filter(part => part.trim() !== '');
 
-                    // Se a IA gerou uma resposta, transmite-a. Senão, apenas finaliza o "carregando".
+                    // --- ALTERAÇÃO APLICADA AQUI ---
+                    // Remove duplicatas antes de exibir
+                    const responseParts = [...new Set(aiResponse.split('\n\n'))].filter(part => part.trim() !== '');
+
                     if (responseParts.length > 0) {
                         streamMessage(responseParts, onStreamComplete);
                     } else {
@@ -696,7 +700,9 @@ const ChatbotWidget = ({ summary }) => {
                 const response = await ai.models.generateContent({ model, contents: prompt });
                 const aiResponse = (response?.text || '').trim();
 
-                const responseParts = aiResponse.split('\n\n').filter(part => part.trim() !== '');
+                // --- ALTERAÇÃO APLICADA AQUI ---
+                // Remove duplicatas antes de exibir
+                const responseParts = [...new Set(aiResponse.split('\n\n'))].filter(part => part.trim() !== '');
 
                 if (responseParts.length > 0) {
                     streamMessage(responseParts, onStreamComplete);
