@@ -11,10 +11,14 @@
   "dependencies": {
     "@google/genai": "^1.17.0",
     "@supabase/supabase-js": "^2.57.2",
+    "dagre": "^0.8.5",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "react-swipeable": "^7.0.2",
+    "reactflow": "^11.11.4"
   },
   "devDependencies": {
+    "@types/dagre": "^0.7.53",
     "@types/node": "^22.14.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
