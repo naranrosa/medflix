@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient, Session } from '@supabase/supabase-js';
+// NOVO: Importações para o Mapa Mental
+import ReactFlow, { MiniMap, Controls, Background, useNodesState, useEdgesState, Position } from 'reactflow';
+import 'reactflow/dist/style.css'; // Em um projeto real, isso estaria no seu arquivo CSS principal
+import * as dagre from 'dagre';
 
 // --- CONFIGURAÇÃO DO SUPABASE ---
 // Cole suas credenciais do Supabase aqui
@@ -96,10 +100,45 @@ const flashcardsSchema = {
   required: ['flashcards']
 };
 
-const QuizQuestion = ({ question }) => {
-  const [selected, setSelected] = useState<number | null>(null);
+// NOVO: Schema para geração de Mapa Mental
+const mindMapSchema = {
+  type: Type.OBJECT,
+  properties: {
+    nodes: {
+      type: Type.ARRAY,
+      description: 'Uma lista de nós para o mapa mental. O primeiro nó deve ser o conceito central.',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING, description: 'Um identificador único para o nó (ex: "node-1").' },
+          label: { type: Type.STRING, description: 'O texto a ser exibido no nó (ex: "Fisiopatologia").' },
+          headingText: { type: Type.STRING, description: 'O texto exato do cabeçalho (h2 ou h3) no resumo ao qual este nó corresponde, para fins de navegação.'}
+        },
+        required: ['id', 'label', 'headingText']
+      }
+    },
+    edges: {
+      type: Type.ARRAY,
+      description: 'Uma lista de arestas conectando os nós, representando as relações entre os conceitos.',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING, description: 'Um identificador único para a aresta (ex: "edge-1-2").' },
+          source: { type: Type.STRING, description: 'O ID do nó de origem.' },
+          target: { type: Type.STRING, description: 'O ID do nó de destino.' }
+        },
+        required: ['id', 'source', 'target']
+      }
+    }
+  },
+  required: ['nodes', 'edges']
+};
 
-  const handleAnswer = (index: number) => {
+
+const QuizQuestion = ({ question }) => {
+  const [selected, setSelected] = useState < number | null > (null);
+
+  const handleAnswer = (index) => {
     if (selected === null) {
       setSelected(index);
     }
@@ -163,7 +202,7 @@ const getNewSubjectColor = (existingSubjects) => {
     return availableColor || subjectColors[Math.floor(Math.random() * subjectColors.length)];
 };
 
-const getGoogleDriveEmbedUrl = (url: string) => {
+const getGoogleDriveEmbedUrl = (url) => {
   if (!url) return null;
   const regExp = /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/;
   const match = url.match(regExp);
@@ -802,6 +841,96 @@ const ChatbotWidget = ({ summary }) => {
 };
 // --- [FIM] COMPONENTE CHATBOT WIDGET FINAL E CORRIGIDO ---
 
+// --- [INÍCIO] COMPONENTE DO MAPA MENTAL (VERSÃO MELHORADA COM DAGRE) ---
+const MindMapView = ({ nodes: initialNodes, edges: initialEdges, onNodeClick }) => {
+
+    // ESTA FUNÇÃO FOI COMPLETAMENTE REFEITA PARA USAR O DAGRE
+    const getLayoutedElements = (nodes, edges) => {
+        if (!nodes || nodes.length === 0) {
+            return { layoutedNodes: [], layoutedEdges: edges || [] };
+        }
+
+        const dagreGraph = new dagre.graphlib.Graph();
+        dagreGraph.setDefaultEdgeLabel(() => ({}));
+
+        // Configurações do layout. 'LR' = Left to Right (da Esquerda para a Direita)
+        // Você pode mudar para 'TB' para Top to Bottom (de Cima para Baixo)
+        dagreGraph.setGraph({ rankdir: 'LR' });
+
+        const nodeWidth = 172;
+        const nodeHeight = 36;
+
+        nodes.forEach((node) => {
+            dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+        });
+
+        edges.forEach((edge) => {
+            dagreGraph.setEdge(edge.source, edge.target);
+        });
+
+        dagre.layout(dagreGraph);
+
+        const layoutedNodes = nodes.map((node) => {
+            const nodeWithPosition = dagreGraph.node(node.id);
+            // Ajusta a posição para que o nó seja posicionado pelo seu centro
+            node.position = {
+                x: nodeWithPosition.x - nodeWidth / 2,
+                y: nodeWithPosition.y - nodeHeight / 2,
+            };
+            // Define de onde as arestas saem e chegam para um layout de fluxograma
+            node.sourcePosition = Position.Right;
+            node.targetPosition = Position.Left;
+
+            return node;
+        });
+
+        return { layoutedNodes, layoutedEdges: edges };
+    };
+
+    const { layoutedNodes, layoutedEdges } = useMemo(
+        () => getLayoutedElements(initialNodes, initialEdges),
+        [initialNodes, initialEdges]
+    );
+
+    const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
+    const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
+
+    useEffect(() => {
+        const { layoutedNodes, layoutedEdges } = getLayoutedElements(initialNodes, initialEdges);
+        setNodes(layoutedNodes.map(n => ({ ...n, data: { label: n.label, headingText: n.headingText } })));
+        setEdges(layoutedEdges.map(e => ({ ...e, animated: true, type: 'smoothstep' }))); // Melhora a aparência das arestas
+    }, [initialNodes, initialEdges, setNodes, setEdges]);
+
+    const handleNodeClick = (event, node) => {
+        if (onNodeClick && node.data.headingText) {
+            onNodeClick(node.data.headingText);
+        }
+    };
+
+    if (!initialNodes || initialNodes.length === 0) {
+        return <p>Não foi possível gerar o mapa mental.</p>;
+    }
+
+    return (
+        <div style={{ height: '600px', width: '100%', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+            <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onNodeClick={handleNodeClick}
+                fitView
+            >
+                <Background />
+                <Controls />
+                <MiniMap />
+            </ReactFlow>
+        </div>
+    );
+};
+// --- [FIM] NOVO COMPONENTE DO MAPA MENTAL ---
+
+
 const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, userProgress }) => {
   const isSearching = searchQuery.trim() !== '';
 
@@ -1330,9 +1459,10 @@ const GoogleDrivePlayer = ({ url }) => {
     );
 };
 
-const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate, onGenerateFlashcards }) => {
+const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate, onGenerateFlashcards, onGenerateMindMap }) => {
     const [activeTab, setActiveTab] = useState('summary');
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isMindMapGenerating, setIsMindMapGenerating] = useState(false);
     const [isTocVisible, setIsTocVisible] = useState(true);
     const [isFlashcardModalOpen, setFlashcardModalOpen] = useState(false);
 
@@ -1352,10 +1482,34 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
         await onGenerateFlashcards(quantity);
         setIsGenerating(false);
         setFlashcardModalOpen(false);
-    }
+    };
+
+    const handleGenerateMindMap = async () => {
+        setIsMindMapGenerating(true);
+        await onGenerateMindMap();
+        setIsMindMapGenerating(false);
+    };
+
+    const handleNodeClick = (headingText) => {
+        setActiveTab('summary');
+        setTimeout(() => {
+            const summaryContentElement = document.querySelector('.summary-content');
+            if (!summaryContentElement) return;
+
+            const headings = summaryContentElement.querySelectorAll('h2, h3');
+            const targetElement = Array.from(headings).find(h => h.textContent.trim() === headingText.trim());
+
+            if (targetElement) {
+                targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                console.warn(`Não foi possível encontrar o cabeçalho: "${headingText}"`);
+            }
+        }, 100);
+    };
 
     const availableTabs = [
         { id: 'summary', label: 'Resumo', condition: true },
+        { id: 'mindmap', label: 'Mapa Mental', condition: true },
         { id: 'video', label: 'Vídeo', condition: !!summary.video },
         { id: 'flashcards', label: 'Flashcards', condition: (summary.flashcards && summary.flashcards.length > 0) || user.role === 'admin' },
         { id: 'questions', label: 'Questões', condition: (summary.questions && summary.questions.length > 0) || user.role === 'admin' }
@@ -1410,6 +1564,31 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                     />
 
                     <div
+                        id="tab-panel-mindmap"
+                        role="tabpanel"
+                        className={activeTab === 'mindmap' ? '' : 'hidden'}
+                    >
+                        {summary.mindMap && summary.mindMap.nodes ? (
+                            <MindMapView
+                                nodes={summary.mindMap.nodes}
+                                edges={summary.mindMap.edges}
+                                onNodeClick={handleNodeClick}
+                            />
+                        ) : (
+                            <div className="quiz-container empty-quiz">
+                                <p>Transforme este resumo em um mapa mental interativo para visualizar as conexões entre os tópicos.</p>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleGenerateMindMap}
+                                    disabled={isMindMapGenerating}
+                                >
+                                    {isMindMapGenerating ? 'Gerando Mapa Mental...' : 'Gerar Mapa Mental com IA'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    <div
                         id="tab-panel-video"
                         role="tabpanel"
                         className={activeTab === 'video' ? '' : 'hidden'}
@@ -1422,7 +1601,6 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                         role="tabpanel"
                         className={activeTab === 'flashcards' ? '' : 'hidden'}
                     >
-                        {/* A verificação aqui garante que `flashcards` tenha conteúdo antes de renderizar */}
                         {(summary.flashcards && summary.flashcards.length > 0) ? (
                             <FlashcardView flashcards={summary.flashcards} />
                         ) : (
@@ -1472,7 +1650,6 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                     isGenerating={isGenerating}
                 />
             )}
-            {/* CHATBOT ADICIONADO AQUI */}
             <ChatbotWidget summary={summary} />
         </div>
     );
@@ -1612,23 +1789,22 @@ const App = () => {
             const { data: summariesData } = await supabase.from('summaries').select('*');
 
             // Função segura para parsear JSON
-            const parseJsonField = (field) => {
+            const parseJsonField = (field, fallback = null) => {
                 if (typeof field === 'string') {
                     try {
                         const parsed = JSON.parse(field);
-                        return Array.isArray(parsed) ? parsed : [];
-                    } catch (e) {
-                        return [];
-                    }
+                        return (typeof parsed === 'object' && parsed !== null) ? parsed : fallback;
+                    } catch (e) { return fallback; }
                 }
-                return Array.isArray(field) ? field : [];
+                return (typeof field === 'object' && field !== null) ? field : fallback;
             };
 
             setSummaries(
               (summariesData || []).map(s => ({
                 ...s,
-                questions: parseJsonField(s.questions),
-                flashcards: parseJsonField(s.flashcards),
+                questions: parseJsonField(s.questions, []),
+                flashcards: parseJsonField(s.flashcards, []),
+                mindMap: parseJsonField(s.mind_map, null), // NOVO: Mapeia o campo mind_map
               }))
             );
         } else {
@@ -1829,6 +2005,40 @@ const App = () => {
     }
   };
 
+    const handleGenerateMindMap = async () => {
+        const summary = summaries.find(s => s.id === currentSummaryId);
+        if (!summary) return;
+        try {
+            const headings = [];
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(summary.content, "text/html");
+            doc.querySelectorAll('h2, h3').forEach(h => headings.push(h.textContent));
+
+            const prompt = `Você é um especialista em estruturação de conhecimento médico. Analise o resumo sobre "${summary.title}" e transforme-o em uma estrutura de mapa mental JSON. O primeiro nó deve ser o tópico principal. Os outros nós devem representar os conceitos-chave. Conecte os nós de forma lógica. Para cada nó, forneça o texto exato do cabeçalho (h2 ou h3) correspondente no campo 'headingText'. Lista de cabeçalhos disponíveis: ${headings.join(', ')}. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
+
+            const response = await ai.models.generateContent({
+                model,
+                contents: prompt,
+                config: { responseMimeType: "application/json", responseSchema: mindMapSchema }
+            });
+            const parsedJson = JSON.parse(response.text.trim());
+
+            const { data, error } = await supabase.from('summaries')
+                .update({ mind_map: parsedJson })
+                .eq('id', currentSummaryId)
+                .select()
+                .single();
+
+            if (error) throw error;
+            setSummaries(summaries.map(s => s.id === currentSummaryId ? { ...s, mindMap: data.mind_map } : s));
+
+        } catch (e) {
+            console.error("Erro ao gerar/salvar mapa mental:", e);
+            alert("Falha ao gerar o mapa mental. O texto pode ser muito curto ou complexo.");
+        }
+    };
+
+
    const handleGetExplanation = async (questionText, correctAnswer) => {
         const summary = summaries.find(s => s.id === currentSummaryId);
         if (!summary) return "Contexto não encontrado.";
@@ -1890,7 +2100,7 @@ const App = () => {
       case 'subject':
         return <SummaryListView subject={currentSubject} summaries={summariesForCurrentSubject} onSelectSummary={handleSelectSummary} onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }} onEditSummary={(summary) => { setEditingSummary(summary); setSummaryModalOpen(true); }} onDeleteSummary={handleDeleteSummary} user={user} userProgress={userProgress} onAIEnhance={() => setAIEnhanceModalOpen(true)} />;
       case 'summary':
-        return <SummaryDetailView summary={currentSummary} onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }} onDelete={() => handleDeleteSummary(currentSummary.id)} onGenerateQuiz={handleGenerateQuiz} onToggleComplete={handleToggleComplete} isCompleted={userProgress.completedSummaries.includes(currentSummary.id)} onGetExplanation={handleGetExplanation} user={user} onAIUpdate={() => setAIUpdateModalOpen(true)} onGenerateFlashcards={handleGenerateFlashcards} />;
+        return <SummaryDetailView summary={currentSummary} onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }} onDelete={() => handleDeleteSummary(currentSummary.id)} onGenerateQuiz={handleGenerateQuiz} onToggleComplete={handleToggleComplete} isCompleted={userProgress.completedSummaries.includes(currentSummary.id)} onGetExplanation={handleGetExplanation} user={user} onAIUpdate={() => setAIUpdateModalOpen(true)} onGenerateFlashcards={handleGenerateFlashcards} onGenerateMindMap={handleGenerateMindMap} />;
       default:
         return <LoginScreen theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />;
     }
