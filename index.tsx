@@ -187,8 +187,8 @@ const ThemeToggle = ({ theme, toggleTheme }) => (
     </div>
 );
 
-const IconButton = ({ onClick, children, className = '' }) => (
-    <button className={`icon-btn ${className}`} onClick={(e) => { e.stopPropagation(); onClick(e); }}>
+const IconButton = ({ onClick, children, className = '', disabled = false }) => (
+    <button className={`icon-btn ${className}`} onClick={(e) => { e.stopPropagation(); onClick(e); }} disabled={disabled}>
         {children}
     </button>
 );
@@ -199,6 +199,11 @@ const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24"
 const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
 const SparklesIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L14.39 8.36L21 9.27L16.36 14.14L18.18 21L12 17.27L5.82 21L7.64 14.14L3 9.27L9.61 8.36L12 2z"/></svg>;
 const ListIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
+
+// --- ÍCONES ADICIONAIS PARA O CHATBOT ---
+const MicIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>;
+const SendIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>;
+const CloseIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>;
 
 
 const Breadcrumbs = ({ paths }) => (
@@ -536,6 +541,147 @@ const AIGenerateFlashcardsModal = ({ onClose, onGenerate, isGenerating }) => {
     );
 };
 
+// --- NOVO COMPONENTE: CHATBOT WIDGET ---
+const ChatbotWidget = ({ subject, summaries }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [messages, setMessages] = useState([]);
+    const [inputValue, setInputValue] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [isListening, setIsListening] = useState(false);
+    const chatboxRef = useRef(null);
+
+    // Rola para a última mensagem
+    useEffect(() => {
+        if (chatboxRef.current) {
+            chatboxRef.current.scrollTop = chatboxRef.current.scrollHeight;
+        }
+    }, [messages]);
+
+    // Gera o contexto para a IA
+    const generateContext = () => {
+        let context = `Você é um tutor amigável e acessível, especialista na disciplina de "${subject.name}".\n`;
+        context += "Sua tarefa é responder às dúvidas dos estudantes de forma clara, direta e encorajadora.\n";
+        context += "Use o material de estudo fornecido como sua principal fonte de conhecimento.\n\n";
+        context += "--- MATERIAL DE ESTUDO ---\n";
+
+        summaries.forEach(summary => {
+            context += `\n**Resumo: ${summary.title}**\n`;
+            context += `${summary.content.replace(/<[^>]*>?/gm, ' ')}\n`; // Remove HTML
+
+            if (summary.questions && summary.questions.length > 0) {
+                context += "\n*Questões relacionadas:*\n";
+                summary.questions.forEach(q => {
+                    context += `- ${q.questionText}\n  Resposta Correta: ${q.alternatives[q.correctAlternativeIndex]}\n`;
+                });
+            }
+             if (summary.flashcards && summary.flashcards.length > 0) {
+                context += "\n*Flashcards relacionados:*\n";
+                summary.flashcards.forEach(f => {
+                    context += `- Pergunta: ${f.front}\n  Resposta: ${f.back}\n`;
+                });
+            }
+        });
+        context += "\n--- FIM DO MATERIAL ---\n\n";
+        return context;
+    };
+
+    const handleSendMessage = async (text) => {
+        if (!text.trim()) return;
+
+        const userMessage = { sender: 'user', text };
+        setMessages(prev => [...prev, userMessage]);
+        setInputValue('');
+        setIsLoading(true);
+
+        try {
+            const context = generateContext();
+            const prompt = `${context}Dúvida do aluno: "${text}"\n\nResponda de forma acessível:`;
+
+            const response = await ai.models.generateContent({ model, contents: prompt });
+            const aiResponse = response.text.trim();
+            const aiMessage = { sender: 'ai', text: aiResponse };
+            setMessages(prev => [...prev, aiMessage]);
+
+        } catch (error) {
+            console.error("Erro ao chamar a IA:", error);
+            const errorMessage = { sender: 'ai', text: 'Desculpe, não consegui processar sua pergunta. Tente novamente.' };
+            setMessages(prev => [...prev, errorMessage]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleAudioInput = () => {
+        // Checa a compatibilidade do navegador com a API de Reconhecimento de Voz
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert('Seu navegador não suporta reconhecimento de voz.');
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'pt-BR';
+        recognition.interimResults = false;
+
+        recognition.onstart = () => setIsListening(true);
+        recognition.onend = () => setIsListening(false);
+        recognition.onerror = (event) => {
+            console.error('Erro no reconhecimento de voz:', event.error);
+            setIsListening(false);
+        };
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            setInputValue(transcript); // Preenche o input
+            handleSendMessage(transcript); // E já envia a mensagem
+        };
+
+        recognition.start();
+    };
+
+    if (!isOpen) {
+        return (
+            <button className="chatbot-fab" onClick={() => setIsOpen(true)}>
+                <SparklesIcon />
+                <span>Dúvidas sobre {subject.name}?</span>
+            </button>
+        );
+    }
+
+    return (
+        <div className="chatbot-widget">
+            <div className="chatbot-header">
+                <h3>Especialista em {subject.name}</h3>
+                <IconButton onClick={() => setIsOpen(false)}><CloseIcon /></IconButton>
+            </div>
+            <div className="chatbot-messages" ref={chatboxRef}>
+                {messages.map((msg, index) => (
+                    <div key={index} className={`message-bubble ${msg.sender}`}>
+                        {msg.text}
+                    </div>
+                ))}
+                {isLoading && <div className="message-bubble ai"><div className="loader-sm"></div></div>}
+            </div>
+            <div className="chatbot-input-area">
+                <textarea
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    placeholder={isListening ? 'Ouvindo...' : 'Digite sua dúvida...'}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage(inputValue);
+                        }
+                    }}
+                    disabled={isLoading || isListening}
+                />
+                <IconButton onClick={() => handleSendMessage(inputValue)} disabled={isLoading || isListening}><SendIcon /></IconButton>
+                <IconButton onClick={handleAudioInput} className={isListening ? 'listening' : ''} disabled={isLoading}><MicIcon /></IconButton>
+            </div>
+        </div>
+    );
+};
+
 
 const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, userProgress }) => {
   const isSearching = searchQuery.trim() !== '';
@@ -832,6 +978,8 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
                     )}
                 </div>
             )}
+            {/* --- WIDGET DO CHATBOT INTEGRADO AQUI --- */}
+            <ChatbotWidget subject={subject} summaries={summaries} />
         </div>
     );
 };
@@ -1468,10 +1616,7 @@ const App = () => {
     }
   };
 
-  // --- CORREÇÃO APLICADA AQUI ---
-  // A lógica de `update` foi corrigida para usar as variáveis corretas.
   const handleSaveSummary = async (summaryData) => {
-    // REMOVIDO: 'audio' do payload de inserção
     const summaryPayload = {
         title: summaryData.title,
         content: summaryData.content,
@@ -1481,7 +1626,6 @@ const App = () => {
     };
     if (summaryData.id) {
         const { data, error } = await supabase.from('summaries')
-            // REMOVIDO: 'audio' do objeto de atualização
             .update({ title: summaryData.title, content: summaryData.content, video: summaryData.video })
             .eq('id', summaryData.id)
             .select();
@@ -1550,16 +1694,14 @@ const App = () => {
         });
         const parsedJson = JSON.parse(response.text.trim());
 
-        // Altere a chamada ao Supabase para ser mais robusta
         const { data, error } = await supabase.from('summaries')
-            .update({ flashcards: parsedJson.flashcards }) // supabase-js v2 lida com a conversão do objeto
+            .update({ flashcards: parsedJson.flashcards })
             .eq('id', currentSummaryId)
             .select()
-            .single(); // Use .single() para obter um único objeto de volta
+            .single();
 
         if (error) throw error;
 
-        // Atualiza o estado local com os dados exatos que foram retornados do banco
         setSummaries(summaries.map(s => s.id === currentSummaryId ? data : s));
 
     } catch (e) {
