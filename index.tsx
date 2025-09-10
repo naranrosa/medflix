@@ -541,8 +541,8 @@ const AIGenerateFlashcardsModal = ({ onClose, onGenerate, isGenerating }) => {
     );
 };
 
-// --- NOVO COMPONENTE: CHATBOT WIDGET ---
-const ChatbotWidget = ({ subject, summaries }) => {
+// --- [INÍCIO] COMPONENTE CHATBOT WIDGET ATUALIZADO ---
+const ChatbotWidget = ({ summary }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([]);
     const [inputValue, setInputValue] = useState('');
@@ -557,36 +557,43 @@ const ChatbotWidget = ({ subject, summaries }) => {
         }
     }, [messages]);
 
-    // Gera o contexto para a IA
+    // Função para converter o markdown simples em HTML
+    const formatMessageText = (text) => {
+        // Converte **negrito** para <strong>negrito</strong>
+        const boldFormatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        // Converte quebras de linha em tags <br> para manter a formatação
+        return boldFormatted.replace(/\n/g, '<br />');
+    };
+
+    // Gera o contexto para a IA, focado em um único resumo
     const generateContext = () => {
-        let context = `Você é um tutor amigável e acessível, especialista na disciplina de "${subject.name}".\n`;
-        context += "Sua tarefa é responder às dúvidas dos estudantes de forma clara, direta e encorajadora.\n";
-        context += "Use o material de estudo fornecido como sua principal fonte de conhecimento.\n\n";
+        let context = `Você é um tutor amigável e acessível, um super especialista no conteúdo do resumo sobre "${summary.title}".\n`;
+        context += "Sua tarefa é responder às dúvidas dos estudantes de forma clara, direta e encorajadora, usando o material de estudo abaixo como sua única fonte de conhecimento.\n\n";
         context += "--- MATERIAL DE ESTUDO ---\n";
+        context += `\n**Resumo: ${summary.title}**\n`;
+        context += `${summary.content.replace(/<[^>]*>?/gm, ' ')}\n`; // Remove HTML
 
-        summaries.forEach(summary => {
-            context += `\n**Resumo: ${summary.title}**\n`;
-            context += `${summary.content.replace(/<[^>]*>?/gm, ' ')}\n`; // Remove HTML
-
-            if (summary.questions && summary.questions.length > 0) {
-                context += "\n*Questões relacionadas:*\n";
-                summary.questions.forEach(q => {
-                    context += `- ${q.questionText}\n  Resposta Correta: ${q.alternatives[q.correctAlternativeIndex]}\n`;
-                });
-            }
-             if (summary.flashcards && summary.flashcards.length > 0) {
-                context += "\n*Flashcards relacionados:*\n";
-                summary.flashcards.forEach(f => {
-                    context += `- Pergunta: ${f.front}\n  Resposta: ${f.back}\n`;
-                });
-            }
-        });
+        if (summary.questions && summary.questions.length > 0) {
+            context += "\n*Questões relacionadas:*\n";
+            summary.questions.forEach(q => {
+                context += `- ${q.questionText}\n  Resposta Correta: ${q.alternatives[q.correctAlternativeIndex]}\n`;
+            });
+        }
+        if (summary.flashcards && summary.flashcards.length > 0) {
+            context += "\n*Flashcards relacionados:*\n";
+            summary.flashcards.forEach(f => {
+                context += `- Pergunta: ${f.front}\n  Resposta: ${f.back}\n`;
+            });
+        }
         context += "\n--- FIM DO MATERIAL ---\n\n";
         return context;
     };
 
     const handleSendMessage = async (text) => {
         if (!text.trim()) return;
+
+        // Verifica se é a primeira interação do usuário na conversa atual
+        const isFirstInteraction = messages.length === 0;
 
         const userMessage = { sender: 'user', text };
         setMessages(prev => [...prev, userMessage]);
@@ -595,7 +602,13 @@ const ChatbotWidget = ({ subject, summaries }) => {
 
         try {
             const context = generateContext();
-            const prompt = `${context}Dúvida do aluno: "${text}"\n\nResponda de forma acessível:`;
+
+            // ALTERAÇÃO: A instrução para a IA muda com base no andamento da conversa.
+            const instruction = isFirstInteraction
+                ? `Responda à dúvida do aluno de forma curtissma e direta:`
+                : `O aluno está buscando uma resposta rapida na conversa. Responda à dúvida dele de forma mais curta e eficaz:`;
+
+            const prompt = `${context}Dúvida do aluno: "${text}"\n\n${instruction}`;
 
             const response = await ai.models.generateContent({ model, contents: prompt });
             const aiResponse = response.text.trim();
@@ -643,7 +656,7 @@ const ChatbotWidget = ({ subject, summaries }) => {
         return (
             <button className="chatbot-fab" onClick={() => setIsOpen(true)}>
                 <SparklesIcon />
-                <span>Dúvidas sobre {subject.name}?</span>
+                <span>Dúvidas sobre "{summary.title}"?</span>
             </button>
         );
     }
@@ -651,13 +664,16 @@ const ChatbotWidget = ({ subject, summaries }) => {
     return (
         <div className="chatbot-widget">
             <div className="chatbot-header">
-                <h3>Especialista em {subject.name}</h3>
+                <h3>Especialista em {summary.title}</h3>
                 <IconButton onClick={() => setIsOpen(false)}><CloseIcon /></IconButton>
             </div>
             <div className="chatbot-messages" ref={chatboxRef}>
                 {messages.map((msg, index) => (
-                    <div key={index} className={`message-bubble ${msg.sender}`}>
-                        {msg.text}
+                    <div
+                        key={index}
+                        className={`message-bubble ${msg.sender}`}
+                        dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text) }}
+                    >
                     </div>
                 ))}
                 {isLoading && <div className="message-bubble ai"><div className="loader-sm"></div></div>}
@@ -681,6 +697,7 @@ const ChatbotWidget = ({ subject, summaries }) => {
         </div>
     );
 };
+// --- [FIM] COMPONENTE CHATBOT WIDGET ATUALIZADO ---
 
 
 const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, userProgress }) => {
@@ -978,8 +995,6 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
                     )}
                 </div>
             )}
-            {/* --- WIDGET DO CHATBOT INTEGRADO AQUI --- */}
-            <ChatbotWidget subject={subject} summaries={summaries} />
         </div>
     );
 };
@@ -1355,6 +1370,8 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                     isGenerating={isGenerating}
                 />
             )}
+            {/* CHATBOT ADICIONADO AQUI */}
+            <ChatbotWidget summary={summary} />
         </div>
     );
 };
