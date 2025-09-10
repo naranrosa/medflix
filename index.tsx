@@ -36,7 +36,6 @@ const enhancedContentSchema = {
     required: ['enhancedContent']
 };
 
-// --- [INÍCIO DA CORREÇÃO] SCHEMA DO QUIZ ATUALIZADO ---
 const quizSchema = {
   type: Type.OBJECT,
   properties: {
@@ -64,7 +63,6 @@ const quizSchema = {
   },
   required: ['questions']
 };
-// --- [FIM DA CORREÇÃO] SCHEMA DO QUIZ ATUALIZADO ---
 
 
 const quizExplanationSchema = {
@@ -200,11 +198,6 @@ const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24"
 const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
 const SparklesIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L14.39 8.36L21 9.27L16.36 14.14L18.18 21L12 17.27L5.82 21L7.64 14.14L3 9.27L9.61 8.36L12 2z"/></svg>;
 const ListIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
-
-// --- ÍCONES ADICIONAIS PARA O CHATBOT ---
-const MicIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>;
-const SendIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>;
-const CloseIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>;
 
 
 const Breadcrumbs = ({ paths }) => (
@@ -495,257 +488,6 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
         </div>
     );
 };
-
-// --- [INÍCIO] COMPONENTE CHATBOT WIDGET FINAL E CORRIGIDO ---
-const ChatbotWidget = ({ summary }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [messages, setMessages] = useState([]);
-    const [inputValue, setInputValue] = useState('');
-    const [isTyping, setIsTyping] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [isListening, setIsListening] = useState(false);
-
-    const [conversationState, setConversationState] = useState('idle');
-    const [specialistName, setSpecialistName] = useState('');
-    const [hasFoundSpecialist, setHasFoundSpecialist] = useState(false);
-
-    const chatboxRef = useRef(null);
-    const specialistNames = ['Alex', 'Bia', 'Carlos', 'Diana', 'Leo', 'Sofia'];
-
-    useEffect(() => {
-        if (chatboxRef.current) {
-            chatboxRef.current.scrollTop = chatboxRef.current.scrollHeight;
-        }
-    }, [messages, isTyping]);
-
-    useEffect(() => {
-        if (isOpen && conversationState === 'idle') {
-            setMessages([]);
-            setInputValue('');
-            setHasFoundSpecialist(false);
-            setIsProcessing(false);
-            setIsTyping(false);
-
-            setConversationState('greeting');
-            const welcomeMessage = { sender: 'ai', text: `Olá! Sou o assistente Medflix e estou aqui para ajudar com suas dúvidas sobre **"${summary.title}"**.` };
-            const questionMessage = { sender: 'ai', text: `Pode me dizer qual é a sua dúvida?` };
-
-            setMessages([welcomeMessage]);
-            setTimeout(() => {
-                setMessages(prev => [...prev, questionMessage]);
-                setConversationState('active');
-            }, 1500);
-
-        } else if (!isOpen) {
-            setConversationState('idle');
-        }
-    }, [isOpen]);
-
-    const streamMessage = (messageParts, onComplete = () => {}) => {
-    if (!messageParts || messageParts.length === 0) {
-        onComplete();
-        return;
-    }
-
-    let currentPart = 0;
-
-    const sendNextPart = () => {
-            setMessages(prev => [...prev, { sender: 'ai', text: messageParts[currentPart] }]);
-            currentPart++;
-
-            if (currentPart < messageParts.length) {
-                setIsTyping(true);
-                setTimeout(sendNextPart, 10000);
-            } else {
-                setIsTyping(false);
-                onComplete();
-            }
-        };
-
-        setTimeout(sendNextPart, 1500);
-    };
-
-    const generateContext = () => {
-        let context = `Você é um tutor especialista chamado **${specialistName}**, expert no conteúdo do resumo sobre "${summary.title}".\n`;
-        context += "Sua tarefa é responder às dúvidas de um estudante de forma clara e didática. Quebre suas respostas em parágrafos curtos e coesos (2-3 sentenças). Separe cada parágrafo com uma quebra de linha dupla.\n\n";
-        context += "--- MATERIAL DE ESTUDO ---\n";
-        context += `${summary.content.replace(/<[^>]*>?/gm, ' ')}\n`;
-        context += "\n--- FIM DO MATERIAL ---\n\n";
-        return context;
-    };
-
-    const handleSendMessage = async (text) => {
-        if (!text.trim() || isProcessing) return;
-
-        const userMessage = { sender: 'user', text };
-        setMessages(prev => [...prev, userMessage]);
-        setInputValue('');
-        setIsProcessing(true);
-
-        const endPhrases = ['obrigado', 'obrigada', 'valeu', 'tchau', 'era só isso'];
-        if (endPhrases.some(phrase => text.toLowerCase().includes(phrase))) {
-            setConversationState('ending');
-            const endMessages = [
-                `De nada! Se precisar de mais alguma coisa, é só chamar.`,
-                `Estou finalizando nosso atendimento. O histórico desta conversa será excluído para sua privacidade.`
-            ];
-            streamMessage(endMessages, () => {
-                setIsProcessing(false);
-                setIsTyping(false);
-                setTimeout(() => {
-                    setIsOpen(false);
-                    setConversationState('idle');
-                }, 5000);
-            });
-            return;
-        }
-
-        const onStreamComplete = () => {
-            setIsProcessing(false);
-            setIsTyping(false);
-        };
-
-        if (!hasFoundSpecialist) {
-            const findingMessage = { sender: 'ai', text: 'Entendido. Vou conectar você com um especialista no assunto, só um momento.' };
-            setMessages(prev => [...prev, findingMessage]);
-            setConversationState('finding_specialist');
-
-            setTimeout(async () => {
-                try {
-                    const randomName = specialistNames[Math.floor(Math.random() * specialistNames.length)];
-                    setSpecialistName(randomName);
-                    setHasFoundSpecialist(true);
-                    setConversationState('active');
-
-                    const introductionMessage = { sender: 'ai', text: `Olá! Eu sou **${randomName}**, seu tutor especialista em ${summary.title}.` };
-                    setMessages(prev => [...prev, introductionMessage]);
-
-                    const context = generateContext();
-                    const prompt = `${context}O estudante perguntou: "${text}"\n\nInstrução: Responda diretamente à pergunta, sem introduções, seguindo as regras de formatação de parágrafos.`;
-
-                    const response = await ai.models.generateContent({ model, contents: prompt });
-                    const aiResponse = (response?.text || '').trim();
-
-                    const responseParts = [...new Set(aiResponse.split('\n\n'))].filter(part => part.trim() !== '');
-
-                    if (responseParts.length > 0) {
-                        streamMessage(responseParts, onStreamComplete);
-                    } else {
-                        onStreamComplete();
-                    }
-
-                } catch (error) {
-                    handleError();
-                }
-
-            }, 10000);
-
-        } else {
-            try {
-                const context = generateContext();
-                const prompt = `${context}O estudante continuou a conversa com: "${text}"\n\nInstrução: Responda diretamente.`;
-                const response = await ai.models.generateContent({ model, contents: prompt });
-                const aiResponse = (response?.text || '').trim();
-
-                const responseParts = [...new Set(aiResponse.split('\n\n'))].filter(part => part.trim() !== '');
-
-                if (responseParts.length > 0) {
-                    streamMessage(responseParts, onStreamComplete);
-                } else {
-                    onStreamComplete();
-                }
-            } catch (error) {
-                handleError();
-            }
-        }
-    };
-
-    const handleError = () => {
-        console.error("Erro ao chamar a IA:");
-        const errorMessage = { sender: 'ai', text: 'Desculpe, não consegui processar sua pergunta. Tente novamente.' };
-        setMessages(prev => [...prev, errorMessage]);
-        setIsProcessing(false);
-        setConversationState('active');
-    };
-
-    const formatMessageText = (text) => {
-        if (typeof text !== 'string') {
-            return '';
-        }
-        return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />');
-    };
-
-    const handleAudioInput = () => {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            alert('Seu navegador não suporta reconhecimento de voz.');
-            return;
-        }
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'pt-BR';
-        recognition.interimResults = false;
-        recognition.onstart = () => setIsListening(true);
-        recognition.onend = () => setIsListening(false);
-        recognition.onerror = (event) => {
-            console.error('Erro no reconhecimento de voz:', event.error);
-            setIsListening(false);
-        };
-        recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript;
-            setInputValue(transcript);
-            handleSendMessage(transcript);
-        };
-        recognition.start();
-    };
-
-    if (!isOpen) {
-        return (
-            <button className="chatbot-fab" onClick={() => setIsOpen(true)}>
-                <SparklesIcon />
-                <span>Dúvidas sobre "{summary.title}"?</span>
-            </button>
-        );
-    }
-
-    return (
-        <div className="chatbot-widget">
-            <div className="chatbot-header">
-                <h3>{hasFoundSpecialist ? `Especialista ${specialistName}` : `Assistente Medflix`}</h3>
-                <IconButton onClick={() => setIsOpen(false)}><CloseIcon /></IconButton>
-            </div>
-            <div className="chatbot-messages" ref={chatboxRef}>
-                {messages.map((msg, index) => (
-                    <div
-                        key={index}
-                        className={`message-bubble ${msg.sender}`}
-                        dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text) }}
-                    ></div>
-                ))}
-                {conversationState === 'finding_specialist' && (
-                     <div className="loader-container full-chat">
-                        <div className="loader"></div>
-                        <p>Buscando especialista na área...</p>
-                    </div>
-                )}
-                {isTyping && <div className="message-bubble ai"><div className="typing-indicator"><span></span><span></span><span></span></div></div>}
-            </div>
-            <div className="chatbot-input-area">
-                <textarea
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    placeholder={isListening ? 'Ouvindo...' : 'Digite sua dúvida...'}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(inputValue); }
-                    }}
-                    disabled={isProcessing || isListening || conversationState !== 'active'}
-                />
-                <IconButton onClick={() => handleSendMessage(inputValue)} disabled={isProcessing || isListening || conversationState !== 'active'}><SendIcon /></IconButton>
-                <IconButton onClick={handleAudioInput} className={isListening ? 'listening' : ''} disabled={isProcessing || conversationState !== 'active'}><MicIcon /></IconButton>
-            </div>
-        </div>
-    );
-};
-// --- [FIM] COMPONENTE CHATBOT WIDGET FINAL E CORRIGIDO ---
 
 const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, userProgress }) => {
   const isSearching = searchQuery.trim() !== '';
@@ -1403,7 +1145,6 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                     </div>
                 </div>
             </div>
-            <ChatbotWidget summary={summary} />
         </div>
     );
 };
@@ -1706,7 +1447,6 @@ const App = () => {
       setAIUpdateModalOpen(false);
   };
 
-  // --- [INÍCIO DA CORREÇÃO] FUNÇÃO DE GERAR QUIZ ATUALIZADA ---
   const handleGenerateQuiz = async () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
@@ -1772,7 +1512,6 @@ const App = () => {
         }
     }
   };
-  // --- [FIM DA CORREÇÃO] FUNÇÃO DE GERAR QUIZ ATUALIZADA ---
 
   const handleGenerateFlashcards = async () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
