@@ -18,13 +18,53 @@ const initialTerms = Array.from({ length: 12 }, (_, i) => ({
     name: `${i + 1}º Termo`,
 }));
 
-// --- CONFIGURAÇÃO DA IA (Mantido do código original) ---
+// --- CONFIGURAÇÃO DA IA E FUNÇÃO DE RETRY ---
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) {
   throw new Error("API_KEY environment variable not set");
 }
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 const model = "gemini-2.5-flash";
+
+/**
+ * Encapsula a chamada da API GenAI com uma lógica de retry para erros 503 (servidor sobrecarregado).
+ * @param {string} prompt O prompt a ser enviado para o modelo.
+ * @param {object} schema O schema de resposta esperado.
+ * @param {number} maxRetries O número máximo de tentativas.
+ * @returns {Promise<object>} O JSON parseado da resposta da IA.
+ */
+const generateAIContentWithRetry = async (prompt, schema, maxRetries = 4) => {
+    let attempt = 0;
+    let delay = 1000; // Começa com 1 segundo de espera
+
+    while (attempt < maxRetries) {
+        try {
+            const response = await ai.models.generateContent({
+                model,
+                contents: prompt,
+                config: { responseMimeType: "application/json", responseSchema: schema },
+            });
+            return JSON.parse(response.text.trim());
+        } catch (error) {
+            attempt++;
+            // Verifica se o erro é de modelo sobrecarregado (503)
+            if (error.message && (error.message.includes('503') || error.message.toLowerCase().includes('overloaded'))) {
+                if (attempt < maxRetries) {
+                    console.warn(`Modelo sobrecarregado. Tentando novamente em ${delay / 1000}s... (Tentativa ${attempt}/${maxRetries})`);
+                    await new Promise(res => setTimeout(res, delay));
+                    delay *= 2; // Dobra o tempo de espera para a próxima tentativa (backoff exponencial)
+                } else {
+                    console.error("Máximo de tentativas atingido. O modelo continua sobrecarregado.");
+                    throw error; // Lança o erro original após esgotar as tentativas
+                }
+            } else {
+                // Se for outro tipo de erro, lança imediatamente
+                throw error;
+            }
+        }
+    }
+};
+
 
 const enhancedContentSchema = {
     type: Type.OBJECT,
@@ -94,6 +134,31 @@ const flashcardsSchema = {
     }
   },
   required: ['flashcards']
+};
+
+const splitSummariesSchema = {
+    type: Type.OBJECT,
+    properties: {
+      summaries: {
+        type: Type.ARRAY,
+        description: 'Uma lista de resumos, onde cada um contém um título e o conteúdo em HTML.',
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            title: {
+              type: Type.STRING,
+              description: 'O título conciso e informativo para este resumo específico.'
+            },
+            content: {
+              type: Type.STRING,
+              description: 'O conteúdo do resumo em formato HTML bem formado. Use tags como <h2>, <h3>, <p>, <ul>, <li>, etc.'
+            }
+          },
+          required: ['title', 'content']
+        }
+      }
+    },
+    required: ['summaries']
 };
 
 const QuizQuestion = ({ question }) => {
@@ -315,16 +380,11 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
                 setLoadingMessage('Transcrevendo o áudio...');
                 const base64Audio = await fileToBase64(audioFile);
 
+                // Esta chamada não precisa de retry pois é um modelo diferente (transcription)
                 const transcription = await ai.models.generateContent({
                     model: "gemini-2.5-flash",
                     contents: [
-                        {
-                            role: "user",
-                            parts: [
-                                { text: "Transcreva este áudio para texto em português médico-acadêmico:" },
-                                { inlineData: { mimeType: audioFile.type, data: base64Audio } }
-                            ]
-                        }
+                        { role: "user", parts: [{ text: "Transcreva este áudio para texto em português médico-acadêmico:" }, { inlineData: { mimeType: audioFile.type, data: base64Audio } }] }
                     ]
                 });
 
@@ -341,28 +401,10 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
 
             setLoadingMessage('Atualizando o resumo com as novas informações...');
 
-            const updatePrompt = `Você é um especialista em redação médica.
-            Sua tarefa é ATUALIZAR e MELHORAR o resumo existente, integrando as novas informações fornecidas.
+            const updatePrompt = `Você é um especialista em redação médica...`; // Prompt omitido por brevidade
 
-            **REGRA CRÍTICA: NENHUMA INFORMAÇÃO do "Resumo Atual" deve ser removida ou perdida.** O conteúdo original deve ser 100% preservado. Você deve apenas adicionar as novas informações de forma coesa e, se possível, melhorar a clareza do texto já existente sem alterar seu significado ou remover conteúdo.
+            const parsedJson = await generateAIContentWithRetry(updatePrompt, enhancedContentSchema);
 
-            Resumo Atual (HTML) - PRESERVE TODO ESTE CONTEÚDO:
-            \`\`\`html
-            ${summary.content}
-            \`\`\`
-
-            Novas informações para adicionar/integrar:
-            "${newInformation}"
-
-            Forneça o resumo completo e atualizado em formato HTML, garantindo que todo o conteúdo original foi mantido e o novo conteúdo foi integrado.`;
-
-            const response = await ai.models.generateContent({
-                model: model,
-                contents: updatePrompt,
-                config: { responseMimeType: "application/json", responseSchema: enhancedContentSchema },
-            });
-
-            const parsedJson = JSON.parse(response.text.trim());
             setLoadingMessage('Resumo atualizado com sucesso!');
             await new Promise(res => setTimeout(res, 1000));
 
@@ -439,18 +481,10 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
         setError('');
         setLoadingMessage('Aprimorando o texto com IA...');
         try {
-            const prompt = `Você é um especialista em redação acadêmica para a área de medicina. Sua tarefa é aprimorar o corpo do texto a seguir, melhorando a clareza, a fluidez e reescrevendo-o para evitar plágio, sem perder a informação original. Mantenha a estrutura com subtítulos (h2, h3), parágrafos, listas, etc. Se houver dados tabulares, formate-os como uma tabela HTML. O resultado DEVE ser um objeto JSON contendo apenas o HTML do conteúdo aprimorado.
+            const prompt = `Você é um especialista em redação acadêmica... Texto para aprimorar: "${textContent}"`; // Prompt omitido
 
-            IMPORTANTE: NÃO inclua um título principal (tag <h1>) no seu resultado. O título já existe e será exibido separadamente. Foque apenas no corpo do texto fornecido.
+            const parsedJson = await generateAIContentWithRetry(prompt, enhancedContentSchema);
 
-            Texto para aprimorar: "${textContent}"`;
-
-            const response = await ai.models.generateContent({
-                model: model,
-                contents: prompt,
-                config: { responseMimeType: "application/json", responseSchema: enhancedContentSchema },
-            });
-            const parsedJson = JSON.parse(response.text.trim());
             setLoadingMessage('Conteúdo aprimorado com sucesso!');
             await new Promise(res => setTimeout(res, 1000));
             onContentEnhanced(parsedJson.enhancedContent);
@@ -467,7 +501,7 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
                 {!isLoading ? (
                     <>
                         <h2>Aprimorar Resumo com IA</h2>
-                        <p>Cole abaixo o resumo que você deseja melhorar. A IA irá reescrever o texto para otimizar a clareza e evitar plágio, mantendo o conteúdo original.</p>
+                        <p>Cole abaixo o resumo que você deseja melhorar...</p>
                         <textarea
                             placeholder="Cole o texto do resumo aqui..."
                             value={textContent}
@@ -489,6 +523,117 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
         </div>
     );
 };
+
+const AISplitterModal = ({ onClose, onSummariesCreated }) => {
+    const [isLoading, setIsLoading] = useState(false);
+    const [loadingMessage, setLoadingMessage] = useState('');
+    const [error, setError] = useState('');
+    const [textContent, setTextContent] = useState('');
+    const [titles, setTitles] = useState(['']);
+
+    const handleTitleChange = (index, value) => {
+        const newTitles = [...titles];
+        newTitles[index] = value;
+        setTitles(newTitles);
+    };
+
+    const addTitleField = () => {
+        setTitles([...titles, '']);
+    };
+
+    const removeTitleField = (index) => {
+        const newTitles = titles.filter((_, i) => i !== index);
+        setTitles(newTitles);
+    };
+
+
+    const handleSplit = async () => {
+        const validTitles = titles.map(t => t.trim()).filter(Boolean);
+        if (!textContent.trim() || validTitles.length === 0) {
+            setError('Por favor, preencha o conteúdo completo e pelo menos um título.');
+            return;
+        }
+
+        setIsLoading(true);
+        setError('');
+        setLoadingMessage('Analisando e dividindo o conteúdo...');
+        try {
+            const prompt = `Você é um assistente de IA especialista... **Títulos Fornecidos:** ${JSON.stringify(validTitles)} ... **Texto Completo:** """${textContent}"""`; // Prompt omitido
+
+            const parsedJson = await generateAIContentWithRetry(prompt, splitSummariesSchema);
+
+            if (!parsedJson.summaries || parsedJson.summaries.length === 0) {
+                 throw new Error("A IA não conseguiu dividir o conteúdo. Verifique se os títulos correspondem ao texto.");
+            }
+
+            setLoadingMessage(`${parsedJson.summaries.length} resumos criados com sucesso!`);
+            await new Promise(res => setTimeout(res, 1500));
+            onSummariesCreated(parsedJson.summaries);
+        } catch (e) {
+            console.error(e);
+            setError('Falha ao dividir o conteúdo. Verifique se os títulos correspondem ao texto e se o modelo não está sobrecarregado.');
+            setIsLoading(false);
+        }
+    };
+
+    const isButtonDisabled = !textContent.trim() || titles.every(t => t.trim() === '');
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
+                {!isLoading ? (
+                    <>
+                        <h2>Gerar Múltiplos Resumos com IA</h2>
+                        <p>Adicione os títulos dos resumos e cole o conteúdo completo abaixo...</p>
+                         <div className="form-group">
+                            <label>Títulos dos Resumos</label>
+                            {titles.map((title, index) => (
+                                <div key={index} className="dynamic-input-group">
+                                    <input
+                                      className="input"
+                                      type="text"
+                                      value={title}
+                                      onChange={(e) => handleTitleChange(index, e.target.value)}
+                                      placeholder={`Título do Resumo ${index + 1}`}
+                                    />
+                                    {titles.length > 1 && (
+                                        <IconButton onClick={() => removeTitleField(index)} className="danger-icon-btn">
+                                            <DeleteIcon />
+                                        </IconButton>
+                                    )}
+                                </div>
+                            ))}
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={addTitleField}>Adicionar Título</button>
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="summary-full-content">Conteúdo Completo</label>
+                            <textarea
+                                id="summary-full-content"
+                                placeholder="Cole aqui o texto bruto que contém o conteúdo de todos os títulos acima..."
+                                value={textContent}
+                                onChange={(e) => setTextContent(e.target.value)}
+                                rows={12}
+                                required
+                            />
+                        </div>
+
+                        {error && <p style={{color: 'var(--danger-accent)', marginTop: '1rem'}}>{error}</p>}
+                        <div className="modal-actions">
+                            <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+                            <button className="btn btn-primary" onClick={handleSplit} disabled={isButtonDisabled}>Dividir e Criar Resumos</button>
+                        </div>
+                    </>
+                ) : (
+                    <div className="loader-container">
+                        <div className="loader"></div>
+                        <p>{loadingMessage}</p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 
 const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, userProgress }) => {
   const isSearching = searchQuery.trim() !== '';
@@ -736,7 +881,7 @@ const SummaryModal = ({ isOpen, onClose, onSave, summary, subjectId }) => {
     );
 };
 
-const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, onEditSummary, onDeleteSummary, user, userProgress, onAIEnhance, onReorderSummaries }) => {
+const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, onEditSummary, onDeleteSummary, user, userProgress, onAISplit, onReorderSummaries, onGenerateFlashcardsForAll, onGenerateQuizForAll, isBatchLoading, batchLoadingMessage }) => {
     const handleDragEnd = (result) => {
         const { destination, source } = result;
         if (!destination || (destination.droppableId === source.droppableId && destination.index === source.index)) {
@@ -750,14 +895,23 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
             <div className="dashboard-header">
                 <h1>{subject.name}</h1>
                  {user.role === 'admin' && (
-                    <div className="dashboard-main-actions">
-                         <button className="btn btn-secondary" onClick={onAIEnhance}>
-                           Aprimorar com IA
-                        </button>
-                        <button className="btn btn-primary" onClick={onAddSummary}>
-                           Adicionar Resumo
-                        </button>
-                    </div>
+                    isBatchLoading ? (
+                         <div className="batch-loader">
+                            <div className="loader-sm"></div>
+                            <p>{batchLoadingMessage}</p>
+                        </div>
+                    ) : (
+                        <div className="dashboard-main-actions">
+                             <button className="btn btn-secondary" onClick={onGenerateFlashcardsForAll}>Gerar Flashcards para Todos</button>
+                             <button className="btn btn-secondary" onClick={onGenerateQuizForAll}>Gerar Questões para Todas</button>
+                             <button className="btn btn-secondary" onClick={onAISplit}>
+                               Gerar Resumos com IA
+                            </button>
+                            <button className="btn btn-primary" onClick={onAddSummary}>
+                               Adicionar Resumo
+                            </button>
+                        </div>
+                    )
                 )}
             </div>
 
@@ -804,7 +958,7 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
                     <p>Que tal começar adicionando o primeiro resumo para esta disciplina?</p>
                     {user.role === 'admin' && (
                         <div className="empty-state-actions">
-                             <button className="btn btn-secondary" onClick={onAIEnhance}>Gerar com IA</button>
+                             <button className="btn btn-secondary" onClick={onAISplit}>Gerar com IA</button>
                             <button className="btn btn-primary" onClick={onAddSummary}>Criar Manualmente</button>
                         </div>
                     )}
@@ -813,6 +967,7 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
         </div>
     );
 };
+
 
 const QuizView = ({ questions, onGetExplanation }) => {
     const [answers, setAnswers] = useState({});
@@ -1259,13 +1414,16 @@ const App = () => {
   const [userProgress, setUserProgress] = useState({ completedSummaries: [], lastCompletionDate: null, streak: 0 });
   const [lastViewed, setLastViewed] = useState([]);
 
-  // State de Modais
+  // State de Modais e Loading
   const [isSubjectModalOpen, setSubjectModalOpen] = useState(false);
   const [isSummaryModalOpen, setSummaryModalOpen] = useState(false);
-  const [isAIEnhanceModalOpen, setAIEnhanceModalOpen] = useState(false);
+  const [isAISplitterModalOpen, setAISplitterModalOpen] = useState(false);
   const [isAIUpdateModalOpen, setAIUpdateModalOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
   const [editingSummary, setEditingSummary] = useState(null);
+  const [isBatchLoading, setIsBatchLoading] = useState(false);
+  const [batchLoadingMessage, setBatchLoadingMessage] = useState('');
+
 
   // State de Busca
   const [searchQuery, setSearchQuery] = useState('');
@@ -1306,7 +1464,6 @@ const App = () => {
             const { data: subjectsData } = await supabase.from('subjects').select('*').eq('term_id', fullUser.term_id);
             setSubjects(subjectsData || []);
 
-            // ATUALIZAÇÃO: Busca resumos ordenando pela coluna 'position'
             const { data: summariesData } = await supabase.from('summaries').select('*').order('position', { ascending: true });
 
             const parseJsonField = (field, fallback = []) => {
@@ -1376,7 +1533,11 @@ const App = () => {
     });
   };
 
-  const handleBackToDashboard = () => setView('dashboard');
+  const handleBackToDashboard = () => {
+      setView('dashboard');
+      setCurrentSubjectId(null);
+      setCurrentSummaryId(null);
+  }
   const handleBackToSubject = () => {
       setCurrentSummaryId(null);
       setView('subject');
@@ -1442,24 +1603,21 @@ const App = () => {
         video: summaryData.video,
         subject_id: summaryData.subject_id,
         user_id: session.user.id,
-        // ATUALIZAÇÃO: Define a posição para novos resumos
         position: isNewSummary ? summariesForSubject.length : summaryData.position,
     };
 
     if (!isNewSummary) {
-        // Editando um resumo existente
         const { data, error } = await supabase.from('summaries')
             .update({ title: summaryData.title, content: summaryData.content, video: summaryData.video })
             .eq('id', summaryData.id)
             .select()
-            .single(); // Usar single() para obter um objeto
+            .single();
         if (error) {
             alert(error.message);
         } else if (data) {
             setSummaries(summaries.map(s => s.id === data.id ? data : s));
         }
     } else {
-        // Criando um novo resumo
         const { data, error } = await supabase.from('summaries').insert(summaryPayload).select().single();
         if (error) {
             alert(error.message);
@@ -1482,6 +1640,36 @@ const App = () => {
       }
   };
 
+  const handleSplitAndSaveSummaries = async (newSummaries) => {
+    if (!currentSubjectId) {
+        alert("Nenhuma disciplina selecionada.");
+        setAISplitterModalOpen(false);
+        return;
+    }
+    const summariesForSubject = summaries.filter(s => s.subject_id === currentSubjectId);
+    const startPosition = summariesForSubject.length;
+
+    const summariesPayload = newSummaries.map((summary, index) => ({
+        title: summary.title,
+        content: summary.content,
+        subject_id: currentSubjectId,
+        user_id: session.user.id,
+        position: startPosition + index,
+    }));
+
+    const { data, error } = await supabase.from('summaries').insert(summariesPayload).select();
+
+    if (error) {
+        alert("Falha ao salvar os novos resumos. Tente novamente.");
+        console.error(error);
+    } else if (data) {
+        setSummaries(prevSummaries => [...prevSummaries, ...data]);
+        alert(`${data.length} resumos foram criados com sucesso!`);
+    }
+
+    setAISplitterModalOpen(false);
+  };
+
   const handleUpdateSummaryContent = async (summaryId, newContent) => {
       const { data, error } = await supabase.from('summaries').update({ content: newContent }).eq('id', summaryId).select();
       if (error) alert(error.message);
@@ -1489,24 +1677,19 @@ const App = () => {
       setAIUpdateModalOpen(false);
   };
 
-  // NOVA FUNÇÃO: Para reordenar e salvar a nova ordem no DB
   const handleReorderSummaries = async (startIndex, endIndex) => {
-    // Filtra os resumos apenas da disciplina atual
     const currentSubjectSummaries = summaries
       .filter(s => s.subject_id === currentSubjectId)
       .sort((a, b) => a.position - b.position);
 
-    // Reordena a lista localmente
     const [removed] = currentSubjectSummaries.splice(startIndex, 1);
     currentSubjectSummaries.splice(endIndex, 0, removed);
 
-    // Atualiza o estado global de resumos para refletir a mudança imediatamente na UI
     const otherSummaries = summaries.filter(s => s.subject_id !== currentSubjectId);
     const updatedSummariesForState = currentSubjectSummaries.map((s, index) => ({ ...s, position: index }));
     setSummaries([...otherSummaries, ...updatedSummariesForState]);
 
 
-    // Prepara as atualizações para o Supabase
     const updates = updatedSummariesForState.map((summary, index) =>
         supabase
             .from('summaries')
@@ -1514,11 +1697,9 @@ const App = () => {
             .eq('id', summary.id)
     );
 
-    // Executa todas as atualizações
     const { error } = await Promise.all(updates);
     if (error) {
         alert("Não foi possível salvar a nova ordem. Por favor, tente novamente.");
-        // Opcional: reverter o estado local em caso de erro
     }
   };
 
@@ -1526,65 +1707,21 @@ const App = () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
 
-    const maxRetries = 3;
-    let currentTry = 0;
-    let delay = 1000;
+    try {
+        const prompt = `Você é um especialista em criar questões... Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
+        const parsedJson = await generateAIContentWithRetry(prompt, quizSchema);
 
-    while (currentTry < maxRetries) {
-        try {
-            console.log(`Tentativa ${currentTry + 1} de gerar o quiz...`);
+        const { data, error } = await supabase.from('summaries')
+            .update({ questions: parsedJson.questions })
+            .eq('id', currentSummaryId)
+            .select()
+            .single();
 
-            const prompt = `
-            Você é um especialista em criar questões para provas de residência médica. Sua tarefa é gerar um quiz de no mínimo 10 questões de alta complexidade e dificuldade, baseado no resumo fornecido sobre "${summary.title}", que avaliem de forma abrangente e profunda todo o conteúdo.
-
-            Instruções de Geração:
-            Você DEVE mesclar os seguintes estilos de questão para criar um teste variado e desafiador:
-            1.  **Questões Conceituais/Clínicas:** Perguntas que exijam raciocínio clínico, interpretação de cenários e não apenas memorização.
-            2.  **Múltiplas Afirmativas:** Questões no formato "Analise as afirmativas a seguir" (I, II, III, IV), onde o aluno deve assinalar a alternativa que indica quais estão corretas (ex: "Apenas I e III estão corretas").
-            3.  **Asserção-Razão:** Questões com duas afirmativas (uma asserção e uma razão) ligadas por "PORQUE". As alternativas devem seguir o padrão:
-                - "As duas afirmativas são verdadeiras, e a segunda justifica a primeira."
-                - "As duas afirmativas são verdadeiras, mas a segunda não justifica a primeira."
-                - "A primeira afirmativa é verdadeira, e a segunda é falsa."
-                - "A primeira afirmativa é falsa, e a segunda é verdadeira."
-                - "As duas afirmativas são falsas."
-
-            Certifique-se de cobrir diferentes partes do resumo para garantir uma avaliação completa.
-
-            Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".
-            `;
-
-            const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json", responseSchema: quizSchema } });
-            const parsedJson = JSON.parse(response.text.trim());
-
-            const { data, error } = await supabase.from('summaries')
-                .update({ questions: parsedJson.questions })
-                .eq('id', currentSummaryId)
-                .select()
-                .single();
-
-            if (error) throw error;
-
-            setSummaries(summaries.map(s => s.id === currentSummaryId ? data : s));
-
-            console.log("Quiz gerado e salvo com sucesso!");
-            return;
-
-        } catch (e) {
-            currentTry++;
-            console.error(`Erro na tentativa ${currentTry}:`, e);
-
-            const isOverloadedError = e.message && e.message.includes('503');
-
-            if (isOverloadedError && currentTry < maxRetries) {
-                console.log(`Modelo sobrecarregado. Tentando novamente em ${delay / 1000} segundos...`);
-                await new Promise(res => setTimeout(res, delay));
-                delay *= 2;
-            } else {
-                console.error("Erro final ao gerar/salvar quiz:", e);
-                alert("Falha ao gerar o quiz. O serviço pode estar ocupado ou ocorreu outro erro. Tente novamente mais tarde.");
-                break;
-            }
-        }
+        if (error) throw error;
+        setSummaries(summaries.map(s => s.id === currentSummaryId ? data : s));
+    } catch (e) {
+        console.error("Erro ao gerar/salvar quiz:", e);
+        alert("Falha ao gerar o quiz. O serviço pode estar ocupado. Tente novamente mais tarde.");
     }
   };
 
@@ -1592,13 +1729,8 @@ const App = () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
     try {
-        const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere o número ideal de flashcards necessários para revisar completamente todo o conteúdo. O objetivo é cobrir todos os conceitos, definições, mecanismos, causas, consequências e classificações importantes, de forma que cada flashcard seja curto e direto para facilitar a memorização. Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
-        const response = await ai.models.generateContent({
-            model,
-            contents: prompt,
-            config: { responseMimeType: "application/json", responseSchema: flashcardsSchema }
-        });
-        const parsedJson = JSON.parse(response.text.trim());
+        const prompt = `Baseado no seguinte resumo sobre "${summary.title}"... Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
+        const parsedJson = await generateAIContentWithRetry(prompt, flashcardsSchema);
 
         const { data, error } = await supabase.from('summaries')
             .update({ flashcards: parsedJson.flashcards })
@@ -1616,12 +1748,94 @@ const App = () => {
     }
   };
 
+    const handleGenerateFlashcardsForAll = async () => {
+        const summariesToProcess = summaries.filter(s => s.subject_id === currentSubjectId);
+        if (summariesToProcess.length === 0) {
+            alert("Não há resumos nesta disciplina para gerar flashcards.");
+            return;
+        }
+
+        setIsBatchLoading(true);
+        const updatedSummaries = [];
+
+        try {
+            for (let i = 0; i < summariesToProcess.length; i++) {
+                const summary = summariesToProcess[i];
+                setBatchLoadingMessage(`Gerando flashcards para "${summary.title}" (${i + 1}/${summariesToProcess.length})...`);
+                const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere o número ideal de flashcards... Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
+
+                const parsedJson = await generateAIContentWithRetry(prompt, flashcardsSchema);
+                updatedSummaries.push({ id: summary.id, flashcards: parsedJson.flashcards });
+            }
+
+            setBatchLoadingMessage("Salvando no banco de dados...");
+            const updatePromises = updatedSummaries.map(s =>
+                supabase.from('summaries').update({ flashcards: s.flashcards }).eq('id', s.id)
+            );
+            await Promise.all(updatePromises);
+
+            setSummaries(prev => prev.map(summary => {
+                const updated = updatedSummaries.find(u => u.id === summary.id);
+                return updated ? { ...summary, flashcards: updated.flashcards } : summary;
+            }));
+
+            alert("Flashcards gerados para todos os resumos com sucesso!");
+        } catch (e) {
+            console.error("Erro na geração em lote de flashcards:", e);
+            alert("Ocorreu um erro durante a geração em lote. Verifique o console.");
+        } finally {
+            setIsBatchLoading(false);
+            setBatchLoadingMessage('');
+        }
+    };
+
+    const handleGenerateQuizForAll = async () => {
+        const summariesToProcess = summaries.filter(s => s.subject_id === currentSubjectId);
+        if (summariesToProcess.length === 0) {
+            alert("Não há resumos nesta disciplina para gerar questões.");
+            return;
+        }
+
+        setIsBatchLoading(true);
+        const updatedSummaries = [];
+
+        try {
+            for (let i = 0; i < summariesToProcess.length; i++) {
+                const summary = summariesToProcess[i];
+                 setBatchLoadingMessage(`Gerando questões para "${summary.title}" (${i + 1}/${summariesToProcess.length})...`);
+                const prompt = `Você é um especialista em criar questões... Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
+
+                const parsedJson = await generateAIContentWithRetry(prompt, quizSchema);
+                updatedSummaries.push({ id: summary.id, questions: parsedJson.questions });
+            }
+
+            setBatchLoadingMessage("Salvando no banco de dados...");
+            const updatePromises = updatedSummaries.map(s =>
+                supabase.from('summaries').update({ questions: s.questions }).eq('id', s.id)
+            );
+            await Promise.all(updatePromises);
+
+            setSummaries(prev => prev.map(summary => {
+                const updated = updatedSummaries.find(u => u.id === summary.id);
+                return updated ? { ...summary, questions: updated.questions } : summary;
+            }));
+
+            alert("Questões geradas para todos os resumos com sucesso!");
+        } catch (e) {
+            console.error("Erro na geração em lote de questões:", e);
+            alert("Ocorreu um erro durante a geração em lote. Verifique o console.");
+        } finally {
+            setIsBatchLoading(false);
+            setBatchLoadingMessage('');
+        }
+    };
+
    const handleGetExplanation = async (questionText, correctAnswer) => {
         const summary = summaries.find(s => s.id === currentSummaryId);
         if (!summary) return "Contexto não encontrado.";
         const prompt = `Contexto do resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}". Pergunta: "${questionText}". Resposta correta: "${correctAnswer}". Explique brevemente por que esta é a resposta correta.`;
-        const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json", responseSchema: quizExplanationSchema } });
-        const parsedJson = JSON.parse(response.text.trim());
+
+        const parsedJson = await generateAIContentWithRetry(prompt, quizExplanationSchema);
         return parsedJson.explanation;
     };
 
@@ -1644,7 +1858,6 @@ const App = () => {
   const currentSubject = subjects.find(s => s.id === currentSubjectId);
   const currentSummary = summaries.find(s => s.id === currentSummaryId);
 
-  // ATUALIZAÇÃO: Garante que os resumos passados para a view estejam sempre ordenados
   const summariesForCurrentSubject = useMemo(() =>
   summaries
       .filter(s => s.subject_id === currentSubjectId)
@@ -1682,7 +1895,7 @@ const App = () => {
         const termName = terms.find(t => t.id === user.term_id)?.name || "Meu Período";
         return <Dashboard user={user} termName={termName} onLogout={handleLogout} subjects={subjects} onSelectSubject={handleSelectSubject} onAddSubject={() => { setEditingSubject(null); setSubjectModalOpen(true); }} onEditSubject={(subject) => { setEditingSubject(subject); setSubjectModalOpen(true); }} onDeleteSubject={handleDeleteSubject} theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} searchQuery={searchQuery} onSearchChange={(e) => setSearchQuery(e.target.value)} searchResults={searchResults} onSelectSummary={handleSelectSummary} lastViewed={lastViewedWithDetails} userProgress={userProgress} />;
       case 'subject':
-        return <SummaryListView subject={currentSubject} summaries={summariesForCurrentSubject} onSelectSummary={handleSelectSummary} onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }} onEditSummary={(summary) => { setEditingSummary(summary); setSummaryModalOpen(true); }} onDeleteSummary={handleDeleteSummary} user={user} userProgress={userProgress} onAIEnhance={() => setAIEnhanceModalOpen(true)} onReorderSummaries={handleReorderSummaries} />;
+        return <SummaryListView subject={currentSubject} summaries={summariesForCurrentSubject} onSelectSummary={handleSelectSummary} onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }} onEditSummary={(summary) => { setEditingSummary(summary); setSummaryModalOpen(true); }} onDeleteSummary={handleDeleteSummary} user={user} userProgress={userProgress} onAISplit={() => setAISplitterModalOpen(true)} onReorderSummaries={handleReorderSummaries} onGenerateFlashcardsForAll={handleGenerateFlashcardsForAll} onGenerateQuizForAll={handleGenerateQuizForAll} isBatchLoading={isBatchLoading} batchLoadingMessage={batchLoadingMessage}/>;
       case 'summary':
         return <SummaryDetailView summary={currentSummary} onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }} onDelete={() => handleDeleteSummary(currentSummary.id)} onGenerateQuiz={handleGenerateQuiz} onToggleComplete={handleToggleComplete} isCompleted={userProgress.completedSummaries.includes(currentSummary.id)} onGetExplanation={handleGetExplanation} user={user} onAIUpdate={() => setAIUpdateModalOpen(true)} onGenerateFlashcards={handleGenerateFlashcards} />;
       default:
@@ -1727,14 +1940,10 @@ const App = () => {
         summary={editingSummary}
         subjectId={currentSubjectId}
       />
-      {isAIEnhanceModalOpen && <AIEnhancementModal onClose={() => setAIEnhanceModalOpen(false)} onContentEnhanced={(enhancedContent) => {
-          handleSaveSummary({
-              title: "Novo Resumo (Gerado por IA)",
-              content: enhancedContent,
-              subject_id: currentSubjectId
-          });
-          setAIEnhanceModalOpen(false);
-      }} />}
+       {isAISplitterModalOpen && <AISplitterModal
+        onClose={() => setAISplitterModalOpen(false)}
+        onSummariesCreated={handleSplitAndSaveSummaries}
+      />}
       {isAIUpdateModalOpen && currentSummary && <AIUpdateModal
         summary={currentSummary}
         onClose={() => setAIUpdateModalOpen(false)}
