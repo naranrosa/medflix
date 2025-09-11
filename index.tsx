@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from "@google/genai";
-import { createClient, Session } from '@supabase/supabase-js';
+import { createClient, Session, User } from '@supabase/supabase-js';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 // --- CONFIGURAÇÃO DO SUPABASE ---
@@ -283,24 +283,58 @@ const Breadcrumbs = ({ paths }) => (
     </nav>
 );
 
-// --- TELA DE LOGIN CORRIGIDA ---
+// --- TELA DE LOGIN ---
 const LoginScreen = ({ theme, toggleTheme }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLogin = async (e) => {
+  const handleAuthAction = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      if (isSignUp) {
+        // --- [ALTERAÇÃO CRÍTICA] ---
+        // Lógica de cadastro em 2 etapas: 1. Auth, 2. Profile
+        // ETAPA 1: Cadastra o usuário no sistema de autenticação do Supabase
+        const { data: authData, error: signUpError } = await supabase.auth.signUp({ email, password });
 
+        if (signUpError) {
+            throw signUpError; // Se der erro na autenticação, interrompe o processo.
+        }
+
+        // ETAPA 2: Se a autenticação foi bem-sucedida, insere os dados na tabela 'profiles'
+        if (authData.user) {
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .insert({
+                    id: authData.user.id,        // Garante que o ID seja o mesmo da tabela de auth
+                    email: authData.user.email,
+                    role: 'user'                 // Define uma role padrão para segurança
+                });
+
+            if (profileError) {
+                // Este é um estado inconsistente (usuário existe na auth, mas não na DB).
+                // É importante logar este erro para correção manual.
+                console.error("ERRO CRÍTICO: Usuário criado na autenticação, mas falhou ao criar o perfil no banco de dados.", profileError);
+                throw new Error("Ocorreu um erro ao finalizar seu cadastro. Por favor, contate o suporte.");
+            }
+        } else {
+            // Caso raro, mas importante de tratar
+            throw new Error("Não foi possível obter os dados do usuário após o cadastro inicial.");
+        }
+      } else {
+        // Lógica de login continua a mesma
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) throw signInError;
+      }
+      // O listener onAuthStateChange no componente App cuidará do redirecionamento e de carregar os dados
     } catch (error) {
-      setError("Email ou senha inválidos. Tente novamente.");
+      setError(error.message || "Ocorreu um erro. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -311,8 +345,8 @@ const LoginScreen = ({ theme, toggleTheme }) => {
       <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
       <div className="login-card">
         <h1>Med<span>flix</span></h1>
-        <p>Faça login para continuar</p>
-        <form onSubmit={handleLogin}>
+        <p>{isSignUp ? 'Crie sua conta para começar' : 'Faça login para continuar'}</p>
+        <form onSubmit={handleAuthAction}>
           <div className="form-group">
             <label htmlFor="email-input">Email</label>
             <input
@@ -339,9 +373,12 @@ const LoginScreen = ({ theme, toggleTheme }) => {
           </div>
           {error && <p className="error-message">{error}</p>}
           <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Carregando...' : 'Entrar'}
+            {loading ? 'Carregando...' : (isSignUp ? 'Cadastrar' : 'Entrar')}
           </button>
         </form>
+        <button className="toggle-auth-btn" onClick={() => setIsSignUp(!isSignUp)}>
+          {isSignUp ? 'Já tem uma conta? Faça login' : 'Não tem uma conta? Cadastre-se'}
+        </button>
       </div>
     </div>
   );
@@ -401,8 +438,19 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
 
             setLoadingMessage('Atualizando o resumo com as novas informações...');
 
-            const updatePrompt = `Você é um especialista em redação médica...`; // Prompt omitido por brevidade
+const updatePrompt = `Você é um especialista em redação médica e acadêmica. Sua tarefa é integrar de forma inteligente novas informações a um resumo existente sobre o mesmo tópico.
+Analise o resumo original e as novas informações fornecidas. Reestruture, reescreva e combine os textos para criar uma versão final aprimorada, coesa e bem organizada. Corrija quaisquer inconsistências e melhore a clareza.
+O resultado final DEVE ser um único bloco de conteúdo em formato HTML bem formado, utilizando tags como <h2>, <h3>, <p>, <ul>, <li>, <strong>, etc., pronto para ser renderizado em uma página web.
 
+**Resumo Original:**
+"""
+${summary.content}
+"""
+
+**Novas Informações a serem Integradas:**
+"""
+${newInformation}
+"""`;
             const parsedJson = await generateAIContentWithRetry(updatePrompt, enhancedContentSchema);
 
             setLoadingMessage('Resumo atualizado com sucesso!');
@@ -481,8 +529,14 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
         setError('');
         setLoadingMessage('Aprimorando o texto com IA...');
         try {
-            const prompt = `Você é um especialista em redação acadêmica... Texto para aprimorar: "${textContent}"`; // Prompt omitido
+const prompt = `Você é um especialista em redação acadêmica e médica. Sua tarefa é aprimorar o texto a seguir, tornando-o mais claro, conciso e profissional.
+Reestruture as frases para melhor fluidez, corrija erros gramaticais e de estilo, e organize o conteúdo de forma lógica.
+Formate o resultado final em HTML bem formado, usando títulos (<h2>, <h3>), parágrafos (<p>), listas (<ul>, <li>) e outras tags relevantes para garantir uma excelente legibilidade. Não inclua a tag <h1>.
 
+**Texto para aprimorar:**
+"""
+${textContent}
+"""`;
             const parsedJson = await generateAIContentWithRetry(prompt, enhancedContentSchema);
 
             setLoadingMessage('Conteúdo aprimorado com sucesso!');
@@ -558,8 +612,17 @@ const AISplitterModal = ({ onClose, onSummariesCreated }) => {
         setError('');
         setLoadingMessage('Analisando e dividindo o conteúdo...');
         try {
-            const prompt = `Você é um assistente de IA especialista... **Títulos Fornecidos:** ${JSON.stringify(validTitles)} ... **Texto Completo:** """${textContent}"""`; // Prompt omitido
+            const prompt = `Você é um assistente de IA especialista em organização e segmentação de conteúdo. Sua tarefa é dividir um texto completo em múltiplos conteudos, baseando-se em uma lista de títulos fornecida.
+            Para cada título na lista, localize a seção correspondente no texto completo e crie um conteudo coeso e bem formatado para ele. O conteúdo de cada resumo deve ser formatado em HTML (usando <p>, <ul>, <li>, <strong>, etc.).
+            Ignore qualquer parte do texto completo que não se relacione com os títulos fornecidos.
 
+            **Títulos Fornecidos para criar os resumos:**
+            ${JSON.stringify(validTitles)}
+
+            **Texto Completo de onde o conteúdo deve ser extraído:**
+            """
+            ${textContent}
+            """`;
             const parsedJson = await generateAIContentWithRetry(prompt, splitSummariesSchema);
 
             if (!parsedJson.summaries || parsedJson.summaries.length === 0) {
@@ -1396,14 +1459,45 @@ const TermSelector = ({ user, terms, onTermUpdate }) => {
     );
 };
 
+// --- [NOVO] Componente para incentivar a assinatura ---
+const SubscriptionPromptScreen = () => {
+    const redirectToCheckout = () => {
+        // !! IMPORTANTE !!
+        // Substitua pela URL real do seu plano de assinatura do Mercado Pago
+        const mercadoPagoCheckoutUrl = 'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=fa9742c919ac44d793ad723d66d9feae';
+        window.location.href = mercadoPagoCheckoutUrl;
+    };
 
-// --- COMPONENTE PRINCIPAL APP ATUALIZADO E COMPLETO ---
+    return (
+        <div className="login-screen">
+            <div className="login-card">
+                <h1>Med<span>flix</span></h1>
+                <h2>Acesse todo o conteúdo</h2>
+                <p>
+                    Para continuar, inicie sua assinatura. Você terá <strong>7 dias de teste gratuito</strong> para explorar
+                    toda a plataforma. Cancele quando quiser.
+                </p>
+                <button onClick={redirectToCheckout} className="btn btn-primary" style={{marginTop: '1rem', width: '100%'}}>
+                    Iniciar Teste Gratuito
+                </button>
+                <button className="btn btn-secondary" onClick={() => supabase.auth.signOut()} style={{marginTop: '0.5rem', width: '100%'}}>
+                    Sair
+                </button>
+            </div>
+        </div>
+    );
+};
+
+
+// --- [ATUALIZADO E CORRIGIDO] COMPONENTE PRINCIPAL APP ---
 const App = () => {
   // State de Autenticação e UI
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
+  const [subscription, setSubscription] = useState(null); // State para a assinatura do usuário
+  const [loading, setLoading] = useState(true); // Começa como true
   const [terms, setTerms] = useState([]);
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
   const [view, setView] = useState('dashboard');
   const [currentSubjectId, setCurrentSubjectId] = useState(null);
   const [currentSummaryId, setCurrentSummaryId] = useState(null);
@@ -1424,18 +1518,71 @@ const App = () => {
   const [isBatchLoading, setIsBatchLoading] = useState(false);
   const [batchLoadingMessage, setBatchLoadingMessage] = useState('');
 
-
   // State de Busca
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Gerencia a sessão de autenticação e busca os termos
+  // useEffect para verificar a sessão inicial e configurar o listener
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
+    // Função async para checar a sessão inicial e qualquer mudança de estado (login/logout)
+    const checkUserSession = async () => {
+      try {
+        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+        setSession(currentSession);
+
+        if (currentSession?.user) {
+            // Se HÁ uma sessão, busca todos os dados necessários
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', currentSession.user.id)
+                .single();
+            if (profileError) throw profileError;
+
+            const fullUser = { ...currentSession.user, ...profileData };
+            setUser(fullUser);
+
+            const { data: subscriptionData, error: subscriptionError } = await supabase
+                .from('subscriptions')
+                .select('*')
+                .eq('user_id', currentSession.user.id)
+                .in('status', ['trialing', 'active'])
+                .single();
+
+            if (subscriptionError && subscriptionError.code !== 'PGRST116') {
+                throw subscriptionError;
+            }
+            setSubscription(subscriptionData);
+
+            if (fullUser.term_id) {
+                await fetchAppData(fullUser.term_id);
+            }
+        } else {
+            // Se NÃO HÁ sessão (usuário fez logout ou a sessão expirou)
+            // Limpa o estado para redirecionar para a tela de login
+            setUser(null);
+            setSubscription(null);
+            setSubjects([]);
+            setSummaries([]);
+        }
+      } catch (error) {
+        console.error("Erro ao verificar a sessão do usuário:", error);
+        // Em caso de erro, limpa o estado para garantir a tela de login
+        setUser(null);
+        setSubscription(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Executa a verificação na montagem inicial do componente
+    checkUserSession();
+
+    // Listener para mudanças de estado (login, logout)
+    const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange((_event, session) => {
+        // Se houver mudança, re-executa a lógica de verificação
+        checkUserSession();
     });
 
     const fetchTerms = async () => {
@@ -1444,73 +1591,57 @@ const App = () => {
     };
     fetchTerms();
 
-    return () => subscription.unsubscribe();
+    // Limpa o listener quando o componente é desmontado
+    return () => {
+        authListener.unsubscribe();
+    };
   }, []);
 
-  // Busca o perfil do usuário e os dados do seu termo quando a sessão muda
-  useEffect(() => {
-    if (session?.user) {
-      const fetchUserProfileAndData = async () => {
-        const { data: profileData, error: profileError } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        if (profileError) {
-          console.error("Erro ao buscar perfil:", profileError);
-          return;
-        }
+  // Função para buscar dados principais da aplicação
+  const fetchAppData = async (termId) => {
+      const { data: subjectsData } = await supabase.from('subjects').select('*').eq('term_id', termId);
+      setSubjects(subjectsData || []);
 
-        const fullUser = { ...session.user, ...profileData };
-        setUser(fullUser);
+      const { data: summariesData } = await supabase.from('summaries').select('*').order('position', { ascending: true });
 
-        if (fullUser.term_id) {
-            const { data: subjectsData } = await supabase.from('subjects').select('*').eq('term_id', fullUser.term_id);
-            setSubjects(subjectsData || []);
-
-            const { data: summariesData } = await supabase.from('summaries').select('*').order('position', { ascending: true });
-
-            const parseJsonField = (field, fallback = []) => {
-                if (typeof field === 'string') {
-                    try {
-                        const parsed = JSON.parse(field);
-                        return Array.isArray(parsed) ? parsed : fallback;
-                    } catch (e) {
-                        return fallback;
-                    }
-                }
-                return Array.isArray(field) ? field : fallback;
-            };
-
-            setSummaries(
-              (summariesData || []).map(s => ({
-                ...s,
-                questions: parseJsonField(s.questions, []),
-                flashcards: parseJsonField(s.flashcards, []),
-              }))
-            );
-        } else {
-            setSubjects([]);
-            setSummaries([]);
-        }
+      const parseJsonField = (field, fallback = []) => {
+          if (typeof field === 'string') {
+              try {
+                  const parsed = JSON.parse(field);
+                  return Array.isArray(parsed) ? parsed : fallback;
+              } catch (e) { return fallback; }
+          }
+          return Array.isArray(field) ? field : fallback;
       };
 
-      fetchUserProfileAndData();
+      setSummaries(
+        (summariesData || []).map(s => ({
+          ...s,
+          questions: parseJsonField(s.questions, []),
+          flashcards: parseJsonField(s.flashcards, []),
+        }))
+      );
+  }
 
-      const savedProgress = localStorage.getItem(`userProgress_${session.user.id}`);
+  // Busca dados do localStorage quando o usuário muda
+  useEffect(() => {
+    if (user) {
+      const savedProgress = localStorage.getItem(`userProgress_${user.id}`);
       if (savedProgress) setUserProgress(JSON.parse(savedProgress));
 
-      const savedLastViewed = localStorage.getItem(`lastViewed_${session.user.id}`);
+      const savedLastViewed = localStorage.getItem(`lastViewed_${user.id}`);
       if(savedLastViewed) setLastViewed(JSON.parse(savedLastViewed));
-    } else {
-      setUser(null);
     }
-  }, [session]);
+  }, [user]);
 
   // Salva dados no localStorage
   useEffect(() => {
     localStorage.setItem('theme', theme);
-    if (session) {
-      localStorage.setItem(`userProgress_${session.user.id}`, JSON.stringify(userProgress));
-      localStorage.setItem(`lastViewed_${session.user.id}`, JSON.stringify(lastViewed));
+    if (user) {
+      localStorage.setItem(`userProgress_${user.id}`, JSON.stringify(userProgress));
+      localStorage.setItem(`lastViewed_${user.id}`, JSON.stringify(lastViewed));
     }
-  }, [theme, userProgress, lastViewed, session]);
+  }, [theme, userProgress, lastViewed, user]);
 
   useEffect(() => {
     document.body.className = theme === 'dark' ? '' : 'light-mode';
@@ -1555,6 +1686,7 @@ const App = () => {
           alert("Erro ao salvar o termo.");
       } else if (data) {
           setUser(prevUser => ({ ...prevUser, ...data }));
+          fetchAppData(newTermId); // Recarrega os dados para o novo termo
       }
   };
 
@@ -1708,8 +1840,14 @@ const App = () => {
     if (!summary) return;
 
     try {
-        const prompt = `Você é um especialista em criar questões... Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
-        const parsedJson = await generateAIContentWithRetry(prompt, quizSchema);
+const prompt = `Você é um especialista em criar questões para provas de residência médica. Baseado estritamente no conteúdo do resumo a seguir, crie uma lista de no mínimo 10 questões de múltipla escolha de alto nível.
+As questões devem ser complexas, mesclando diferentes formatos (ex: caso clínico curto, "qual das seguintes NÃO é", etc.). Cada questão deve ter 4 alternativas plausíveis, mas apenas uma correta.
+Forneça também um comentário explicativo para a resposta correta, justificando-a com base no texto do resumo.
+
+**Resumo para extrair as questões:**
+"""
+${summary.content.replace(/<[^>]*>?/gm, ' ')}
+"""`;        const parsedJson = await generateAIContentWithRetry(prompt, quizSchema);
 
         const { data, error } = await supabase.from('summaries')
             .update({ questions: parsedJson.questions })
@@ -1729,8 +1867,16 @@ const App = () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
     try {
-        const prompt = `Baseado no seguinte resumo sobre "${summary.title}"... Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
-        const parsedJson = await generateAIContentWithRetry(prompt, flashcardsSchema);
+const prompt = `Baseado no seguinte resumo sobre "${summary.title}", sua tarefa é criar um conjunto de flashcards para estudo e memorização.
+Cada flashcard deve ser claro e objetivo, no formato pergunta-e-resposta (frente e verso).
+Priorize conceitos-chave, definições, mecanismos de ação, causas, consequências, classificações e relações clínicas importantes.
+EVITE incluir valores específicos de exames laboratoriais ou dados numéricos que mudam com frequência. O foco é no conceito.
+Cada flashcard deve ser curto e direto para facilitar a memorização rápida.
+
+**Resumo para extrair os flashcards:**
+"""
+${summary.content.replace(/<[^>]*>?/gm, ' ')}
+"""`;        const parsedJson = await generateAIContentWithRetry(prompt, flashcardsSchema);
 
         const { data, error } = await supabase.from('summaries')
             .update({ flashcards: parsedJson.flashcards })
@@ -1762,8 +1908,16 @@ const App = () => {
             for (let i = 0; i < summariesToProcess.length; i++) {
                 const summary = summariesToProcess[i];
                 setBatchLoadingMessage(`Gerando flashcards para "${summary.title}" (${i + 1}/${summariesToProcess.length})...`);
-                const prompt = `Baseado no seguinte resumo sobre "${summary.title}", gere o número ideal de flashcards... Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
+const prompt = `Baseado no seguinte resumo sobre "${summary.title}", sua tarefa é criar um conjunto de flashcards para estudo e memorização.
+Cada flashcard deve ser claro e objetivo, no formato pergunta-e-resposta (frente e verso).
+Priorize conceitos-chave, definições, mecanismos de ação, causas, consequências, classificações e relações clínicas importantes.
+EVITE incluir valores específicos de exames laboratoriais ou dados numéricos que mudam com frequência. O foco é no conceito.
+Cada flashcard deve ser curto e direto para facilitar a memorização rápida.
 
+**Resumo para extrair os flashcards:**
+"""
+${summary.content.replace(/<[^>]*>?/gm, ' ')}
+"""`;
                 const parsedJson = await generateAIContentWithRetry(prompt, flashcardsSchema);
                 updatedSummaries.push({ id: summary.id, flashcards: parsedJson.flashcards });
             }
@@ -1803,8 +1957,14 @@ const App = () => {
             for (let i = 0; i < summariesToProcess.length; i++) {
                 const summary = summariesToProcess[i];
                  setBatchLoadingMessage(`Gerando questões para "${summary.title}" (${i + 1}/${summariesToProcess.length})...`);
-                const prompt = `Você é um especialista em criar questões... Resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}".`;
+const prompt = `Você é um especialista em criar questões para provas de residência médica. Baseado estritamente no conteúdo do resumo a seguir, crie uma lista de no mínimo 10 questões de múltipla escolha de alto nível.
+As questões devem ser complexas, mesclando diferentes formatos (ex: caso clínico curto, "qual das seguintes NÃO é", etc.). Cada questão deve ter 4 alternativas plausíveis, mas apenas uma correta.
+Forneça também um comentário explicativo para a resposta correta, justificando-a com base no texto do resumo.
 
+**Resumo para extrair as questões:**
+"""
+${summary.content.replace(/<[^>]*>?/gm, ' ')}
+"""`;
                 const parsedJson = await generateAIContentWithRetry(prompt, quizSchema);
                 updatedSummaries.push({ id: summary.id, questions: parsedJson.questions });
             }
@@ -1881,9 +2041,22 @@ const App = () => {
     }).filter(lv => subjects.find(s => s.id === lv.subject_id));
   }, [lastViewed, subjects]);
 
-  const renderContent = () => {
+    const needsSubscription =
+      !subscription &&
+      user?.role !== 'administrador' &&
+      !user?.has_manual_access;
+
+    const renderContent = () => {
+    if (loading) {
+        return <div className="loader-container"><div className="loader"></div></div>;
+    }
+
     if (!session || !user) {
         return <LoginScreen theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />;
+    }
+
+    if (needsSubscription) {
+        return <SubscriptionPromptScreen />;
     }
 
     if (!user.term_id) {
@@ -1894,10 +2067,13 @@ const App = () => {
       case 'dashboard':
         const termName = terms.find(t => t.id === user.term_id)?.name || "Meu Período";
         return <Dashboard user={user} termName={termName} onLogout={handleLogout} subjects={subjects} onSelectSubject={handleSelectSubject} onAddSubject={() => { setEditingSubject(null); setSubjectModalOpen(true); }} onEditSubject={(subject) => { setEditingSubject(subject); setSubjectModalOpen(true); }} onDeleteSubject={handleDeleteSubject} theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} searchQuery={searchQuery} onSearchChange={(e) => setSearchQuery(e.target.value)} searchResults={searchResults} onSelectSummary={handleSelectSummary} lastViewed={lastViewedWithDetails} userProgress={userProgress} />;
+
       case 'subject':
         return <SummaryListView subject={currentSubject} summaries={summariesForCurrentSubject} onSelectSummary={handleSelectSummary} onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }} onEditSummary={(summary) => { setEditingSummary(summary); setSummaryModalOpen(true); }} onDeleteSummary={handleDeleteSummary} user={user} userProgress={userProgress} onAISplit={() => setAISplitterModalOpen(true)} onReorderSummaries={handleReorderSummaries} onGenerateFlashcardsForAll={handleGenerateFlashcardsForAll} onGenerateQuizForAll={handleGenerateQuizForAll} isBatchLoading={isBatchLoading} batchLoadingMessage={batchLoadingMessage}/>;
+
       case 'summary':
         return <SummaryDetailView summary={currentSummary} onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }} onDelete={() => handleDeleteSummary(currentSummary.id)} onGenerateQuiz={handleGenerateQuiz} onToggleComplete={handleToggleComplete} isCompleted={userProgress.completedSummaries.includes(currentSummary.id)} onGetExplanation={handleGetExplanation} user={user} onAIUpdate={() => setAIUpdateModalOpen(true)} onGenerateFlashcards={handleGenerateFlashcards} />;
+
       default:
         return <LoginScreen theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />;
     }
@@ -1916,7 +2092,7 @@ const App = () => {
 
   return (
     <>
-      {user && user.term_id && view !== 'dashboard' && (
+      {user && user.term_id && !needsSubscription && view !== 'dashboard' && (
           <div className="main-header">
               <Breadcrumbs paths={breadcrumbPaths} />
               <ThemeToggle theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
@@ -1952,7 +2128,6 @@ const App = () => {
     </>
   );
 };
-
 
 const root = createRoot(document.getElementById('root'));
 root.render(<App />);
