@@ -5,10 +5,11 @@ import { createClient, Session, User } from '@supabase/supabase-js';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 // --- CONFIGURAÇÃO DO SUPABASE ---
-// Cole suas credenciais do Supabase aqui
+// !! IMPORTANTE: Substitua pelas suas credenciais reais do Supabase !!
 const supabaseUrl = 'https://vylpdfeqdylcqxzllnbh.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5bHBkZmVxZHlsY3F4emxsbmJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxNjY3NzMsImV4cCI6MjA3Mjc0Mjc3M30.muT9yFZaHottkDM-acc6iU5XHqbo7yqTF-bpPoAotMY';
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 
 
 // --- DADOS MOCADOS (APENAS PARA PREENCHER A INTERFACE INICIALMENTE) ---
@@ -44,25 +45,55 @@ const generateAIContentWithRetry = async (prompt, schema, maxRetries = 4) => {
                 contents: prompt,
                 config: { responseMimeType: "application/json", responseSchema: schema },
             });
-            return JSON.parse(response.text.trim());
+
+            // --- [CORREÇÃO] Início da lógica robusta de parse ---
+            let rawText = response.text.trim();
+
+            // 1. Tenta extrair o JSON de dentro de um bloco de código markdown.
+            const jsonMatch = rawText.match(/```json\s*([\s\S]*?)\s*```/);
+            if (jsonMatch && jsonMatch[1]) {
+                rawText = jsonMatch[1];
+            }
+
+            // 2. Isola o objeto JSON principal para remover texto extra.
+            const firstBracket = rawText.indexOf('{');
+            const lastBracket = rawText.lastIndexOf('}');
+            if (firstBracket !== -1 && lastBracket > firstBracket) {
+                rawText = rawText.substring(firstBracket, lastBracket + 1);
+            }
+
+            // 3. Tenta fazer o parse do texto limpo.
+            try {
+                return JSON.parse(rawText);
+            } catch (parseError) {
+                console.error("ERRO DE PARSE JSON:", parseError);
+                console.error("--- TEXTO BRUTO DA IA QUE FALHOU --- \n", rawText, "\n--- FIM DO TEXTO BRUTO ---");
+                // Lança um erro específico para que a lógica de retry possa capturá-lo.
+                throw new Error("JSON_PARSE_FAILED");
+            }
+            // --- Fim da lógica robusta de parse ---
+
         } catch (error) {
             attempt++;
-            // Verifica se o erro é de modelo sobrecarregado (503)
-            if (error.message && (error.message.includes('503') || error.message.toLowerCase().includes('overloaded'))) {
-                if (attempt < maxRetries) {
-                    console.warn(`Modelo sobrecarregado. Tentando novamente em ${delay / 1000}s... (Tentativa ${attempt}/${maxRetries})`);
-                    await new Promise(res => setTimeout(res, delay));
-                    delay *= 2; // Dobra o tempo de espera para a próxima tentativa (backoff exponencial)
-                } else {
-                    console.error("Máximo de tentativas atingido. O modelo continua sobrecarregado.");
-                    throw error; // Lança o erro original após esgotar as tentativas
-                }
+            const isOverloaded = error.message && (error.message.includes('503') || error.message.toLowerCase().includes('overloaded'));
+            const isParseFailure = error.message === "JSON_PARSE_FAILED";
+
+            if ((isOverloaded || isParseFailure) && attempt < maxRetries) {
+                const reason = isOverloaded ? "Modelo sobrecarregado" : "Resposta JSON inválida";
+                console.warn(`${reason}. Tentando novamente em ${delay / 1000}s... (Tentativa ${attempt}/${maxRetries})`);
+                await new Promise(res => setTimeout(res, delay));
+                delay *= 2; // Backoff exponencial
             } else {
-                // Se for outro tipo de erro, lança imediatamente
-                throw error;
+                if (isParseFailure) {
+                    console.error("Máximo de tentativas atingido. A IA continua retornando JSON inválido.");
+                    throw new Error("A resposta da IA não pôde ser processada. Por favor, tente novamente.");
+                }
+                console.error("Erro final da API ou máximo de tentativas atingido para servidor sobrecarregado.");
+                throw error; // Lança o erro original após esgotar as tentativas
             }
         }
     }
+    throw new Error("Não foi possível gerar conteúdo da IA após múltiplas tentativas.");
 };
 
 
@@ -160,6 +191,21 @@ const splitSummariesSchema = {
     },
     required: ['summaries']
 };
+
+const identifyTitlesSchema = {
+    type: Type.OBJECT,
+    properties: {
+        titles: {
+            type: Type.ARRAY,
+            description: "Uma lista de títulos de resumos concisos e informativos identificados no texto.",
+            items: {
+                type: Type.STRING
+            }
+        }
+    },
+    required: ['titles']
+};
+
 
 const QuizQuestion = ({ question }) => {
   const [selected, setSelected] = useState(null);
@@ -299,46 +345,53 @@ const LoginScreen = ({ theme, toggleTheme }) => {
     try {
       if (isSignUp) {
         // --- [ALTERAÇÃO CRÍTICA] ---
-        // Lógica de cadastro em 2 etapas: 1. Auth, 2. Profile
-        // ETAPA 1: Cadastra o usuário no sistema de autenticação do Supabase
-        const { data: authData, error: signUpError } = await supabase.auth.signUp({ email, password });
+        // --- ETAPA 1: Cadastra o usuário no sistema de autenticação do Supabase
+    const { data: authData, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+    if (signUpError) throw signUpError;
 
-        if (signUpError) {
-            throw signUpError; // Se der erro na autenticação, interrompe o processo.
-        }
-
-        // ETAPA 2: Se a autenticação foi bem-sucedida, insere os dados na tabela 'profiles'
-        if (authData.user) {
-            const { error: profileError } = await supabase
-                .from('profiles')
-                .insert({
-                    id: authData.user.id,        // Garante que o ID seja o mesmo da tabela de auth
-                    email: authData.user.email,
-                    role: 'user'                 // Define uma role padrão para segurança
-                });
-
-            if (profileError) {
-                // Este é um estado inconsistente (usuário existe na auth, mas não na DB).
-                // É importante logar este erro para correção manual.
-                console.error("ERRO CRÍTICO: Usuário criado na autenticação, mas falhou ao criar o perfil no banco de dados.", profileError);
-                throw new Error("Ocorreu um erro ao finalizar seu cadastro. Por favor, contate o suporte.");
-            }
-        } else {
-            // Caso raro, mas importante de tratar
-            throw new Error("Não foi possível obter os dados do usuário após o cadastro inicial.");
-        }
-      } else {
-        // Lógica de login continua a mesma
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-        if (signInError) throw signInError;
-      }
-      // O listener onAuthStateChange no componente App cuidará do redirecionamento e de carregar os dados
-    } catch (error) {
-      setError(error.message || "Ocorreu um erro. Tente novamente.");
-    } finally {
-      setLoading(false);
+    // ETAPA 2: Garante que há sessão
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error("Sessão ainda não criada. Verifique configuração de confirmação de email no Supabase.");
     }
-  };
+
+    // ETAPA 3: Cria o perfil no banco
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .insert({
+        id: authData.user.id,
+        email: authData.user.email,
+        role: "user",
+      });
+
+    if (profileError) {
+      console.error(
+        "ERRO CRÍTICO: Usuário criado na autenticação, mas falhou ao criar o perfil no banco de dados.",
+        profileError
+      );
+      throw new Error(
+        "Ocorreu um erro ao finalizar seu cadastro. Por favor, contate o suporte."
+      );
+    }
+  } else {
+    // --- Login normal ---
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (signInError) throw signInError;
+  }
+
+  // O listener onAuthStateChange no componente App cuidará do redirecionamento
+} catch (error) {
+  setError(error.message || "Ocorreu um erro. Tente novamente.");
+} finally {
+  setLoading(false);
+}
+};
 
   return (
     <div className="login-screen">
@@ -578,119 +631,182 @@ ${textContent}
     );
 };
 
-const AISplitterModal = ({ onClose, onSummariesCreated }) => {
+const AISplitterModal = ({ isOpen, onClose, onSummariesCreated }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState('');
     const [textContent, setTextContent] = useState('');
-    const [titles, setTitles] = useState(['']);
+    const [currentStep, setCurrentStep] = useState(1); // 1: Identify titles, 2: Edit titles
+    const [identifiedTitles, setIdentifiedTitles] = useState([]);
 
-    const handleTitleChange = (index, value) => {
-        const newTitles = [...titles];
-        newTitles[index] = value;
-        setTitles(newTitles);
+    useEffect(() => {
+        if (isOpen) {
+            // Reset state when modal opens
+            setTextContent('');
+            setError('');
+            setCurrentStep(1);
+            setIdentifiedTitles([]);
+            setIsLoading(false);
+        }
+    }, [isOpen]);
+
+    if (!isOpen) return null;
+
+    const handleIdentifyTitles = async () => {
+        if (!textContent.trim()) {
+            setError('Por favor, cole o conteúdo do documento.');
+            return;
+        }
+        setIsLoading(true);
+        setError('');
+        setLoadingMessage('Identificando títulos no documento...');
+        try {
+            const prompt = `Você é um assistente especialista em estruturação de conteúdo acadêmico. Sua tarefa é analisar um documento e extrair os títulos de todos os resumos individuais com base em um padrão estrutural específico.
+
+**INSTRUÇÃO CRÍTICA:** O padrão para identificar um título é que ele aparece **imediatamente na linha de baixo após o nome da disciplina**, que está em maiúsculas. Por exemplo:
+- \`Anatomia III
+    Telencefalo\`
+- \`Fisiologia III
+    Sistema Nervoso Autônomo 1\`
+
+Nos exemplos acima, você deve extrair "Telencefalo" e "Sistema Nervoso Autônomo 1". Ignore o nome da disciplina no seu resultado.
+
+Analise todo o texto abaixo, identifique todos os títulos dos resumos seguindo esta regra.
+
+**Texto para Análise:**
+"""
+${textContent}
+"""`;
+            const parsedJson = await generateAIContentWithRetry(prompt, identifyTitlesSchema);
+            const uniqueTitles = [...new Set(parsedJson.titles || [])];
+            setIdentifiedTitles(uniqueTitles.map((title, index) => ({ id: index, name: title })));
+            setCurrentStep(2);
+        } catch (e) {
+            console.error(e);
+            setError('Não foi possível identificar os títulos. Verifique se o texto segue o padrão esperado ou se o modelo está sobrecarregado.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const addTitleField = () => {
-        setTitles([...titles, '']);
-    };
-
-    const removeTitleField = (index) => {
-        const newTitles = titles.filter((_, i) => i !== index);
-        setTitles(newTitles);
-    };
-
-
-    const handleSplit = async () => {
-        const validTitles = titles.map(t => t.trim()).filter(Boolean);
-        if (!textContent.trim() || validTitles.length === 0) {
-            setError('Por favor, preencha o conteúdo completo e pelo menos um título.');
+    const handleGenerateSummaries = async () => {
+        const finalTitles = identifiedTitles.map(t => t.name.trim()).filter(Boolean);
+        if (finalTitles.length === 0) {
+            setError("Nenhum título válido para gerar resumos. Adicione ou edite a lista.");
             return;
         }
 
         setIsLoading(true);
         setError('');
-        setLoadingMessage('Analisando e dividindo o conteúdo...');
+        setLoadingMessage('Gerando conteúdo dos resumos...');
+
         try {
-            const prompt = `Você é um assistente de IA especialista em organização e segmentação de conteúdo. Sua tarefa é dividir um texto completo em múltiplos conteudos, baseando-se em uma lista de títulos fornecida.
-            Para cada título na lista, localize a seção correspondente no texto completo e crie um conteudo coeso e bem formatado para ele. O conteúdo de cada resumo deve ser formatado em HTML (usando <p>, <ul>, <li>, <strong>, etc.).
-            Ignore qualquer parte do texto completo que não se relacione com os títulos fornecidos.
+            const prompt = `Sua tarefa é criar um resumo detalhado para cada título na lista fornecida, usando o documento de texto completo como contexto. Para cada título, localize a seção correspondente no documento e extraia/reescreva o conteúdo. Formate o conteúdo em HTML bem-formado (usando <p>, <ul>, <li>, <strong>, etc.). Retorne uma lista de objetos, cada um contendo o 'title' e seu 'content' em HTML correspondente.
 
-            **Títulos Fornecidos para criar os resumos:**
-            ${JSON.stringify(validTitles)}
+**Lista de Títulos para Processar:**
+${JSON.stringify(finalTitles)}
 
-            **Texto Completo de onde o conteúdo deve ser extraído:**
-            """
-            ${textContent}
-            """`;
+**Documento de Texto Completo:**
+"""
+${textContent}
+"""`;
+
             const parsedJson = await generateAIContentWithRetry(prompt, splitSummariesSchema);
-
             if (!parsedJson.summaries || parsedJson.summaries.length === 0) {
-                 throw new Error("A IA não conseguiu dividir o conteúdo. Verifique se os títulos correspondem ao texto.");
+                throw new Error("A IA não conseguiu gerar os resumos para os títulos fornecidos.");
             }
-
             setLoadingMessage(`${parsedJson.summaries.length} resumos criados com sucesso!`);
             await new Promise(res => setTimeout(res, 1500));
             onSummariesCreated(parsedJson.summaries);
+
         } catch (e) {
             console.error(e);
-            setError('Falha ao dividir o conteúdo. Verifique se os títulos correspondem ao texto e se o modelo não está sobrecarregado.');
+            setError('Falha ao gerar os resumos. Verifique se os títulos correspondem ao conteúdo do texto.');
             setIsLoading(false);
         }
     };
 
-    const isButtonDisabled = !textContent.trim() || titles.every(t => t.trim() === '');
+    const handleTitleNameChange = (id, newName) => {
+        setIdentifiedTitles(titles =>
+            titles.map(t => t.id === id ? { ...t, name: newName } : t)
+        );
+    };
+
+    const addTitleField = () => {
+        setIdentifiedTitles(titles => [...titles, { id: Date.now(), name: '' }]);
+    };
+
+    const removeTitleField = (id) => {
+        setIdentifiedTitles(titles => titles.filter(t => t.id !== id));
+    };
+
+    const renderStepOne = () => (
+        <>
+            <h2>Gerar Resumos em Lote com IA</h2>
+            <p>**Etapa 1:** Cole o documento da disciplina abaixo. A IA irá identificar e sugerir os títulos dos resumos.</p>
+            <div className="modal-form-content" style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '1rem' }}>
+                <div className="form-group">
+                    <label htmlFor="summary-full-content">Conteúdo Completo da Disciplina</label>
+                    <textarea
+                        id="summary-full-content"
+                        placeholder="Cole aqui o texto bruto que contém o conteúdo de todos os resumos para esta disciplina..."
+                        value={textContent}
+                        onChange={(e) => setTextContent(e.target.value)}
+                        rows={15}
+                        required
+                    />
+                </div>
+            </div>
+            {error && <p style={{ color: 'var(--danger-accent)', marginTop: '1rem' }}>{error}</p>}
+            <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+                <button className="btn btn-primary" onClick={handleIdentifyTitles} disabled={!textContent.trim()}>1. Identificar Títulos</button>
+            </div>
+        </>
+    );
+
+    const renderStepTwo = () => (
+         <>
+            <h2>Gerar Resumos em Lote com IA</h2>
+            <p>**Etapa 2:** Revise, edite, adicione ou remova os títulos sugeridos. Em seguida, gere os resumos.</p>
+            <div className="modal-form-content" style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '1rem' }}>
+                 <div className="form-group">
+                    <label>Títulos Sugeridos</label>
+                    {identifiedTitles.map((title, index) => (
+                        <div key={title.id} className="dynamic-input-group">
+                            <input
+                                className="input"
+                                type="text"
+                                value={title.name}
+                                onChange={(e) => handleTitleNameChange(title.id, e.target.value)}
+                                placeholder={`Título do Resumo ${index + 1}`}
+                            />
+                            <IconButton onClick={() => removeTitleField(title.id)} className="danger-icon-btn">
+                                <DeleteIcon />
+                            </IconButton>
+                        </div>
+                    ))}
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={addTitleField}>Adicionar Título</button>
+                </div>
+            </div>
+            {error && <p style={{ color: 'var(--danger-accent)', marginTop: '1rem' }}>{error}</p>}
+            <div className="modal-actions">
+                 <button className="btn btn-secondary" onClick={() => setCurrentStep(1)}>Voltar</button>
+                <button className="btn btn-primary" onClick={handleGenerateSummaries} disabled={identifiedTitles.every(t => t.name.trim() === '')}>2. Gerar Resumos para estes Títulos</button>
+            </div>
+        </>
+    );
 
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
-                {!isLoading ? (
-                    <>
-                        <h2>Gerar Múltiplos Resumos com IA</h2>
-                        <p>Adicione os títulos dos resumos e cole o conteúdo completo abaixo...</p>
-                         <div className="form-group">
-                            <label>Títulos dos Resumos</label>
-                            {titles.map((title, index) => (
-                                <div key={index} className="dynamic-input-group">
-                                    <input
-                                      className="input"
-                                      type="text"
-                                      value={title}
-                                      onChange={(e) => handleTitleChange(index, e.target.value)}
-                                      placeholder={`Título do Resumo ${index + 1}`}
-                                    />
-                                    {titles.length > 1 && (
-                                        <IconButton onClick={() => removeTitleField(index)} className="danger-icon-btn">
-                                            <DeleteIcon />
-                                        </IconButton>
-                                    )}
-                                </div>
-                            ))}
-                            <button type="button" className="btn btn-secondary btn-sm" onClick={addTitleField}>Adicionar Título</button>
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="summary-full-content">Conteúdo Completo</label>
-                            <textarea
-                                id="summary-full-content"
-                                placeholder="Cole aqui o texto bruto que contém o conteúdo de todos os títulos acima..."
-                                value={textContent}
-                                onChange={(e) => setTextContent(e.target.value)}
-                                rows={12}
-                                required
-                            />
-                        </div>
-
-                        {error && <p style={{color: 'var(--danger-accent)', marginTop: '1rem'}}>{error}</p>}
-                        <div className="modal-actions">
-                            <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-                            <button className="btn btn-primary" onClick={handleSplit} disabled={isButtonDisabled}>Dividir e Criar Resumos</button>
-                        </div>
-                    </>
-                ) : (
+                {isLoading ? (
                     <div className="loader-container">
                         <div className="loader"></div>
                         <p>{loadingMessage}</p>
                     </div>
+                ) : (
+                    currentStep === 1 ? renderStepOne() : renderStepTwo()
                 )}
             </div>
         </div>
@@ -754,7 +870,7 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
             </div>
           )}
 
-          <div className="add-subject-button-container" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
+          <div className="add-subject-button-container">
               {user.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
           </div>
 
@@ -968,7 +1084,7 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
                              <button className="btn btn-secondary" onClick={onGenerateFlashcardsForAll}>Gerar Flashcards para Todos</button>
                              <button className="btn btn-secondary" onClick={onGenerateQuizForAll}>Gerar Questões para Todas</button>
                              <button className="btn btn-secondary" onClick={onAISplit}>
-                               Gerar Resumos com IA
+                               Adicionar Resumos em Lote
                             </button>
                             <button className="btn btn-primary" onClick={onAddSummary}>
                                Adicionar Resumo
@@ -1021,7 +1137,7 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
                     <p>Que tal começar adicionando o primeiro resumo para esta disciplina?</p>
                     {user.role === 'admin' && (
                         <div className="empty-state-actions">
-                             <button className="btn btn-secondary" onClick={onAISplit}>Gerar com IA</button>
+                             <button className="btn btn-secondary" onClick={onAISplit}>Adicionar Resumos em Lote</button>
                             <button className="btn btn-primary" onClick={onAddSummary}>Criar Manualmente</button>
                         </div>
                     )}
@@ -1895,9 +2011,9 @@ ${summary.content.replace(/<[^>]*>?/gm, ' ')}
   };
 
     const handleGenerateFlashcardsForAll = async () => {
-        const summariesToProcess = summaries.filter(s => s.subject_id === currentSubjectId);
+        const summariesToProcess = summaries.filter(s => s.subject_id === currentSubjectId && (!s.flashcards || s.flashcards.length === 0));
         if (summariesToProcess.length === 0) {
-            alert("Não há resumos nesta disciplina para gerar flashcards.");
+            alert("Não há resumos sem flashcards nesta disciplina.");
             return;
         }
 
@@ -1933,7 +2049,7 @@ ${summary.content.replace(/<[^>]*>?/gm, ' ')}
                 return updated ? { ...summary, flashcards: updated.flashcards } : summary;
             }));
 
-            alert("Flashcards gerados para todos os resumos com sucesso!");
+            alert(`Flashcards gerados para ${updatedSummaries.length} resumos com sucesso!`);
         } catch (e) {
             console.error("Erro na geração em lote de flashcards:", e);
             alert("Ocorreu um erro durante a geração em lote. Verifique o console.");
@@ -1944,9 +2060,9 @@ ${summary.content.replace(/<[^>]*>?/gm, ' ')}
     };
 
     const handleGenerateQuizForAll = async () => {
-        const summariesToProcess = summaries.filter(s => s.subject_id === currentSubjectId);
+        const summariesToProcess = summaries.filter(s => s.subject_id === currentSubjectId && (!s.questions || s.questions.length === 0));
         if (summariesToProcess.length === 0) {
-            alert("Não há resumos nesta disciplina para gerar questões.");
+            alert("Não há resumos sem questões nesta disciplina.");
             return;
         }
 
@@ -1980,7 +2096,7 @@ ${summary.content.replace(/<[^>]*>?/gm, ' ')}
                 return updated ? { ...summary, questions: updated.questions } : summary;
             }));
 
-            alert("Questões geradas para todos os resumos com sucesso!");
+            alert(`Questões geradas para ${updatedSummaries.length} resumos com sucesso!`);
         } catch (e) {
             console.error("Erro na geração em lote de questões:", e);
             alert("Ocorreu um erro durante a geração em lote. Verifique o console.");
@@ -2116,10 +2232,11 @@ ${summary.content.replace(/<[^>]*>?/gm, ' ')}
         summary={editingSummary}
         subjectId={currentSubjectId}
       />
-       {isAISplitterModalOpen && <AISplitterModal
+       <AISplitterModal
+        isOpen={isAISplitterModalOpen}
         onClose={() => setAISplitterModalOpen(false)}
         onSummariesCreated={handleSplitAndSaveSummaries}
-      />}
+      />
       {isAIUpdateModalOpen && currentSummary && <AIUpdateModal
         summary={currentSummary}
         onClose={() => setAIUpdateModalOpen(false)}
