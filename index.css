@@ -2373,3 +2373,11 @@ body.light-mode {
     background-color: var(--secondary-bg);
     border-radius: 8px;
 }
+
+/* Espaçamento para o botão "Adicionar Disciplina" */
+.add-subject-button-container {
+  margin-bottom: 2rem; /* Aumenta a distância para os elementos abaixo */
+  display: flex;
+  justify-content: flex-start; /* ou center se quiser centralizar */
+}
+
