@@ -2381,3 +2381,32 @@ body.light-mode {
   justify-content: flex-start; /* ou center se quiser centralizar */
 }
 
+/* Estilo para os subtítulos dos resumos */
+.summary-content h2,
+.summary-content h3 {
+  /* Define a cor de fundo usando a variável que passamos */
+  background-color: var(--subject-color);
+
+  /* Cor do texto e sombra para garantir a legibilidade */
+  color: #ffffff;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.25);
+
+  /* Espaçamento interno para o texto não ficar colado nas bordas */
+  padding: 8px 16px;
+
+  /* Espaçamento externo para separar o título do resto do conteúdo */
+  margin-top: 2rem;
+  margin-bottom: 1.5rem;
+
+  /* Cantos arredondados para um visual mais suave */
+  border-radius: 8px;
+
+  /* Garante que a caixa ocupe toda a largura disponível */
+  display: block;
+}
+
+/* Opcional: Estilo um pouco mais sutil para os subtítulos de menor nível (h3) */
+.summary-content h3 {
+  padding: 6px 14px;
+  font-size: 1.3em; /* Ajuste o tamanho conforme preferir */
+}
