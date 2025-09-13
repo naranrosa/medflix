@@ -1227,7 +1227,7 @@ const QuizView = ({ questions, onGetExplanation }) => {
     );
 };
 
-const FlashcardView = ({ flashcards }) => {
+const FlashcardView = ({ flashcards, summaryId }) => {
     const [deck, setDeck] = useState([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
@@ -1239,7 +1239,7 @@ const FlashcardView = ({ flashcards }) => {
         setCurrentIndex(0);
         setIsFlipped(false);
         setIsFinished(false);
-    }, [flashcards]);
+    }, [summaryId]);
 
     const handleFlip = () => setIsFlipped(prev => !prev);
 
@@ -1475,7 +1475,7 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
                         className={activeTab === 'flashcards' ? '' : 'hidden'}
                     >
                         {(summary.flashcards && summary.flashcards.length > 0) ? (
-                            <FlashcardView flashcards={summary.flashcards} />
+                            <FlashcardView flashcards={summary.flashcards} summaryId={summary.id} />
                         ) : (
                             user.role === 'admin' && (
                                 <div className="quiz-container empty-quiz">
