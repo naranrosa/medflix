@@ -2402,11 +2402,14 @@ body.light-mode {
   border-radius: 8px;
 
   /* Garante que a caixa ocupe toda a largura disponível */
-  display: block;
+  display: inline-block;
+  max-width: fit-content;
+  font-size: 1.4rem; /* Tamanho padrão para os títulos (h2) */
+
 }
 
 /* Opcional: Estilo um pouco mais sutil para os subtítulos de menor nível (h3) */
 .summary-content h3 {
   padding: 6px 14px;
-  font-size: 1.3em; /* Ajuste o tamanho conforme preferir */
+  font-size: 1.0em; /* Ajuste o tamanho conforme preferir */
 }
