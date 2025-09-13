@@ -302,17 +302,18 @@ html, body {
 
 .subject-card {
   border-radius: 12px;
-  padding: 1.5rem;
-  min-height: 150px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+  padding: 0.75rem 1rem;   /* padding menor para ficar mais compacto */
+  display: inline-flex;    /* encolhe de acordo com o conteúdo */
+  align-items: center;
   color: white;
   transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
   cursor: pointer;
   border: 1px solid var(--border-color);
   position: relative;
+  width: fit-content;      /* largura só até o texto */
+  height: auto;            /* altura só até o texto */
 }
+
 
 .subject-card:hover {
   transform: translateY(-5px);
