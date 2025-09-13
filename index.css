@@ -566,18 +566,12 @@ html, body {
 .summary-content h1 {
    display: none;
 }
-.summary-content h2 {
-    font-size: 1.8rem;
-    margin-top: 2rem;
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid var(--border-color);
-}
+.summary-content h2,
 .summary-content h3 {
-    font-size: 1.4rem;
-    margin-top: 1.5rem;
-    margin-bottom: 0.75rem;
+  background-color: transparent !important; /* tira o fundo vermelho */
+  padding: 0; /* remove espaçamento extra */
 }
+
 .summary-content p {
     line-height: 1.8;
     margin-bottom: 1rem;
