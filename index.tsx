@@ -153,7 +153,7 @@ const flashcardsSchema = {
   properties: {
     flashcards: {
       type: Type.ARRAY,
-      description: 'gerar flashcards claros e objetivos a partir dele, organizados em formato de pergunta e resposta, sem incluir valores de exames laboratoriais ou dados numéricos específicos, priorizando conceitos, definições, mecanismos, causas, consequências, classificações e relações clínicas relevantes, de forma que cada flashcard seja curto, direto e facilite a memorização rápida, tendo uma lista de flashcards com frente e verso, .',
+      description: 'gerar flashcards claros e objetivos a partir dele, organizados em formato de pergunta e resposta, sem incluir valores de exames laboratoriais ou dados numéricos específicos, priorizando conceitos, definições, mecanismos, causas, consequências, classificações e relações clínicas relevantes, de forma que cada flashcard seja curto, direto e facilite a memorização rápida, tendo uma lista de flashcards com frente e verso, deve ser a quantidade necessária para o aluno aprender todo o conteudo presente no resumo .',
       items: {
         type: Type.OBJECT,
         properties: {
@@ -1365,21 +1365,21 @@ const GoogleDrivePlayer = ({ url }) => {
         <div className="youtube-player-container">
             <iframe
                 src={embedUrl}
-                allow="autoplay"
+                allow="autoplay; fullscreen"
                 frameBorder="0"
-                title="Vídeo do Google Drive">
+                title="Vídeo do Google Drive"
+                allowFullScreen>
             </iframe>
         </div>
     );
 };
 
-const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate, onGenerateFlashcards }) => {
+const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate, onGenerateFlashcards }) => {
     const [activeTab, setActiveTab] = useState('summary');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isTocVisible, setIsTocVisible] = useState(true);
 
     useEffect(() => {
-        setActiveTab('summary');
         setIsTocVisible(true);
     }, [summary]);
 
@@ -1447,6 +1447,7 @@ const SummaryDetailView = ({ summary, onEdit, onDelete, onGenerateQuiz, onToggle
                         id="tab-panel-summary"
                         role="tabpanel"
                         className={`summary-content ${activeTab === 'summary' ? '' : 'hidden'}`}
+                        style={{ '--subject-color': subject?.color || '#6c757d' }}
                         dangerouslySetInnerHTML={{ __html: summary.content }}
                     />
 
@@ -2188,7 +2189,19 @@ ${summary.content.replace(/<[^>]*>?/gm, ' ')}
         return <SummaryListView subject={currentSubject} summaries={summariesForCurrentSubject} onSelectSummary={handleSelectSummary} onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }} onEditSummary={(summary) => { setEditingSummary(summary); setSummaryModalOpen(true); }} onDeleteSummary={handleDeleteSummary} user={user} userProgress={userProgress} onAISplit={() => setAISplitterModalOpen(true)} onReorderSummaries={handleReorderSummaries} onGenerateFlashcardsForAll={handleGenerateFlashcardsForAll} onGenerateQuizForAll={handleGenerateQuizForAll} isBatchLoading={isBatchLoading} batchLoadingMessage={batchLoadingMessage}/>;
 
       case 'summary':
-        return <SummaryDetailView summary={currentSummary} onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }} onDelete={() => handleDeleteSummary(currentSummary.id)} onGenerateQuiz={handleGenerateQuiz} onToggleComplete={handleToggleComplete} isCompleted={userProgress.completedSummaries.includes(currentSummary.id)} onGetExplanation={handleGetExplanation} user={user} onAIUpdate={() => setAIUpdateModalOpen(true)} onGenerateFlashcards={handleGenerateFlashcards} />;
+        return <SummaryDetailView
+                  summary={currentSummary}
+                  subject={currentSubject}
+                  onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }}
+                  onDelete={() => handleDeleteSummary(currentSummary.id)}
+                  onGenerateQuiz={handleGenerateQuiz}
+                  onToggleComplete={handleToggleComplete}
+                  isCompleted={userProgress.completedSummaries.includes(currentSummary.id)}
+                  onGetExplanation={handleGetExplanation}
+                  user={user}
+                  onAIUpdate={() => setAIUpdateModalOpen(true)}
+                  onGenerateFlashcards={handleGenerateFlashcards}
+                />;
 
       default:
         return <LoginScreen theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />;
