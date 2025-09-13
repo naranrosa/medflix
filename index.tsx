@@ -1394,15 +1394,19 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
     }, [summary]);
 
     const handleGenerateQuiz = async () => {
-        setIsGenerating(true);
-        await onGenerateQuiz();
-        setIsGenerating(false);
+        if (window.confirm("Tem certeza que deseja gerar novas questões? As questões atuais serão substituídas.")) {
+            setIsGenerating(true);
+            await onGenerateQuiz();
+            setIsGenerating(false);
+        }
     };
 
     const handleGenerateFlashcards = async () => {
-        setIsGenerating(true);
-        await onGenerateFlashcards();
-        setIsGenerating(false);
+        if (window.confirm("Tem certeza que deseja gerar novos flashcards? Os flashcards atuais serão substituídos.")) {
+            setIsGenerating(true);
+            await onGenerateFlashcards();
+            setIsGenerating(false);
+        }
     }
 
     const availableTabs = [
@@ -1475,7 +1479,20 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
                         className={activeTab === 'flashcards' ? '' : 'hidden'}
                     >
                         {(summary.flashcards && summary.flashcards.length > 0) ? (
-                            <FlashcardView flashcards={summary.flashcards} summaryId={summary.id} />
+                            <>
+                                <FlashcardView flashcards={summary.flashcards} summaryId={summary.id} />
+                                {user.role === 'admin' && (
+                                    <div className="update-content-container">
+                                         <button
+                                            className="btn btn-secondary"
+                                            onClick={handleGenerateFlashcards}
+                                            disabled={isGenerating}
+                                        >
+                                            {isGenerating ? 'Atualizando...' : 'Atualizar Flashcards existentes'}
+                                        </button>
+                                    </div>
+                                )}
+                            </>
                         ) : (
                             user.role === 'admin' && (
                                 <div className="quiz-container empty-quiz">
@@ -1498,7 +1515,20 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
                         className={activeTab === 'questions' ? '' : 'hidden'}
                     >
                         {summary.questions && summary.questions.length > 0 ? (
-                            <QuizView questions={summary.questions} onGetExplanation={onGetExplanation} />
+                             <>
+                                <QuizView questions={summary.questions} onGetExplanation={onGetExplanation} />
+                                {user.role === 'admin' && (
+                                    <div className="update-content-container">
+                                        <button
+                                            className="btn btn-secondary"
+                                            onClick={handleGenerateQuiz}
+                                            disabled={isGenerating}
+                                        >
+                                            {isGenerating ? 'Atualizando...' : 'Atualizar Questões existentes'}
+                                        </button>
+                                    </div>
+                                )}
+                            </>
                         ) : (
                             user.role === 'admin' && (
                                 <div className="quiz-container empty-quiz">
