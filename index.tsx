@@ -267,7 +267,17 @@ const QuizQuestion = ({ question }) => {
 };
 
 // --- FUNÇÕES AUXILIARES (HELPER FUNCTIONS) ---
-const subjectColors = ['#007BFF', '#28A745', '#DC3545', '#FFC107', '#17A2B8', '#6610f2', '#fd7e14', '#20c997', '#e83e8c'];
+const subjectColors = [
+  '#A8DADC', // azul pastel
+  '#F4A261', // laranja suave
+  '#E9C46A', // amarelo pastel
+  '#F6BD60', // dourado claro
+  '#D4A5A5', // rosa pastel
+  '#B5CDA3', // verde claro
+  '#CDB4DB', // lilás
+  '#FFDAC1', // pêssego
+  '#BDE0FE'  // azul bebê
+];
 const getNewSubjectColor = (existingSubjects) => {
     const usedColors = new Set(existingSubjects.map(s => s.color));
     const availableColor = subjectColors.find(c => !usedColors.has(c));
