@@ -5,15 +5,11 @@ import { createClient, Session, User } from '@supabase/supabase-js';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 // --- CONFIGURAÇÃO DO SUPABASE ---
-// !! IMPORTANTE: Substitua pelas suas credenciais reais do Supabase !!
 const supabaseUrl = 'https://vylpdfeqdylcqxzllnbh.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5bHBkZmVxZHlsY3F4emxsbmJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxNjY3NzMsImV4cCI6MjA3Mjc0Mjc3M30.muT9yFZaHottkDM-acc6iU5XHqbo7yqTF-bpPoAotMY';
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-
-
 // --- DADOS MOCADOS (APENAS PARA PREENCHER A INTERFACE INICIALMENTE) ---
-// Em uma aplicação real, os termos também viriam do banco de dados.
 const initialTerms = Array.from({ length: 12 }, (_, i) => ({
     id: `t${i + 1}`,
     name: `${i + 1}º Termo`,
@@ -36,7 +32,7 @@ const model = "gemini-2.5-flash";
  */
 const generateAIContentWithRetry = async (prompt, schema, maxRetries = 4) => {
     let attempt = 0;
-    let delay = 1000; // Começa com 1 segundo de espera
+    let delay = 1000;
 
     while (attempt < maxRetries) {
         try {
@@ -46,32 +42,25 @@ const generateAIContentWithRetry = async (prompt, schema, maxRetries = 4) => {
                 config: { responseMimeType: "application/json", responseSchema: schema },
             });
 
-            // --- [CORREÇÃO] Início da lógica robusta de parse ---
             let rawText = response.text.trim();
-
-            // 1. Tenta extrair o JSON de dentro de um bloco de código markdown.
             const jsonMatch = rawText.match(/```json\s*([\s\S]*?)\s*```/);
             if (jsonMatch && jsonMatch[1]) {
                 rawText = jsonMatch[1];
             }
 
-            // 2. Isola o objeto JSON principal para remover texto extra.
             const firstBracket = rawText.indexOf('{');
             const lastBracket = rawText.lastIndexOf('}');
             if (firstBracket !== -1 && lastBracket > firstBracket) {
                 rawText = rawText.substring(firstBracket, lastBracket + 1);
             }
 
-            // 3. Tenta fazer o parse do texto limpo.
             try {
                 return JSON.parse(rawText);
             } catch (parseError) {
                 console.error("ERRO DE PARSE JSON:", parseError);
                 console.error("--- TEXTO BRUTO DA IA QUE FALHOU --- \n", rawText, "\n--- FIM DO TEXTO BRUTO ---");
-                // Lança um erro específico para que a lógica de retry possa capturá-lo.
                 throw new Error("JSON_PARSE_FAILED");
             }
-            // --- Fim da lógica robusta de parse ---
 
         } catch (error) {
             attempt++;
@@ -82,14 +71,14 @@ const generateAIContentWithRetry = async (prompt, schema, maxRetries = 4) => {
                 const reason = isOverloaded ? "Modelo sobrecarregado" : "Resposta JSON inválida";
                 console.warn(`${reason}. Tentando novamente em ${delay / 1000}s... (Tentativa ${attempt}/${maxRetries})`);
                 await new Promise(res => setTimeout(res, delay));
-                delay *= 2; // Backoff exponencial
+                delay *= 2;
             } else {
                 if (isParseFailure) {
                     console.error("Máximo de tentativas atingido. A IA continua retornando JSON inválido.");
                     throw new Error("A resposta da IA não pôde ser processada. Por favor, tente novamente.");
                 }
                 console.error("Erro final da API ou máximo de tentativas atingido para servidor sobrecarregado.");
-                throw error; // Lança o erro original após esgotar as tentativas
+                throw error;
             }
         }
     }
@@ -258,7 +247,6 @@ const QuizQuestion = ({ question }) => {
             </>
           )}
 
-          {/* Sempre exibe a explicação */}
           <p><strong>Comentário:</strong> {question.explanation}</p>
         </div>
       )}
@@ -266,17 +254,10 @@ const QuizQuestion = ({ question }) => {
   );
 };
 
-// --- FUNÇÕES AUXILIARES (HELPER FUNCTIONS) ---
+// --- FUNÇÕES AUXILIARES ---
 const subjectColors = [
-  '#A8DADC', // azul pastel
-  '#F4A261', // laranja suave
-  '#E9C46A', // amarelo pastel
-  '#F6BD60', // dourado claro
-  '#D4A5A5', // rosa pastel
-  '#B5CDA3', // verde claro
-  '#CDB4DB', // lilás
-  '#FFDAC1', // pêssego
-  '#BDE0FE'  // azul bebê
+  '#A8DADC', '#F4A261', '#E9C46A', '#F6BD60', '#D4A5A5',
+  '#B5CDA3', '#CDB4DB', '#FFDAC1', '#BDE0FE'
 ];
 const getNewSubjectColor = (existingSubjects) => {
     const usedColors = new Set(existingSubjects.map(s => s.color));
@@ -292,8 +273,6 @@ const getGoogleDriveEmbedUrl = (url) => {
     ? `https://drive.google.com/file/d/${match[1]}/preview`
     : null;
 };
-
-
 
 // --- COMPONENTES ---
 
@@ -339,7 +318,6 @@ const Breadcrumbs = ({ paths }) => (
     </nav>
 );
 
-// --- TELA DE LOGIN ---
 const LoginScreen = ({ theme, toggleTheme }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -353,55 +331,30 @@ const LoginScreen = ({ theme, toggleTheme }) => {
     setError('');
 
     try {
-      if (isSignUp) {
-        // --- [ALTERAÇÃO CRÍTICA] ---
-        // --- ETAPA 1: Cadastra o usuário no sistema de autenticação do Supabase
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    if (signUpError) throw signUpError;
+        if (isSignUp) {
+            const { error: signUpError } = await supabase.auth.signUp({
+                email,
+                password,
+            });
 
-    // ETAPA 2: Garante que há sessão
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      throw new Error("Sessão ainda não criada. Verifique configuração de confirmação de email no Supabase.");
+            if (signUpError) throw signUpError;
+
+            const mercadoPagoCheckoutUrl = 'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=fa9742c919ac44d793ad723d66d9feae';
+            window.location.href = mercadoPagoCheckoutUrl;
+
+        } else {
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+            if (signInError) throw signInError;
+        }
+    } catch (error) {
+        setError(error.message || "Ocorreu um erro. Tente novamente.");
+    } finally {
+        setLoading(false);
     }
-
-    // ETAPA 3: Cria o perfil no banco
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .insert({
-        id: authData.user.id,
-        email: authData.user.email,
-        role: "user",
-      });
-
-    if (profileError) {
-      console.error(
-        "ERRO CRÍTICO: Usuário criado na autenticação, mas falhou ao criar o perfil no banco de dados.",
-        profileError
-      );
-      throw new Error(
-        "Ocorreu um erro ao finalizar seu cadastro. Por favor, contate o suporte."
-      );
-    }
-  } else {
-    // --- Login normal ---
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (signInError) throw signInError;
-  }
-
-  // O listener onAuthStateChange no componente App cuidará do redirecionamento
-} catch (error) {
-  setError(error.message || "Ocorreu um erro. Tente novamente.");
-} finally {
-  setLoading(false);
-}
-};
+  };
 
   return (
     <div className="login-screen">
@@ -436,7 +389,7 @@ const LoginScreen = ({ theme, toggleTheme }) => {
           </div>
           {error && <p className="error-message">{error}</p>}
           <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Carregando...' : (isSignUp ? 'Cadastrar' : 'Entrar')}
+            {loading ? 'Carregando...' : (isSignUp ? 'Registrar e Pagar' : 'Entrar')}
           </button>
         </form>
         <button className="toggle-auth-btn" onClick={() => setIsSignUp(!isSignUp)}>
@@ -480,7 +433,6 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
                 setLoadingMessage('Transcrevendo o áudio...');
                 const base64Audio = await fileToBase64(audioFile);
 
-                // Esta chamada não precisa de retry pois é um modelo diferente (transcription)
                 const transcription = await ai.models.generateContent({
                     model: "gemini-2.5-flash",
                     contents: [
@@ -646,12 +598,11 @@ const AISplitterModal = ({ isOpen, onClose, onSummariesCreated }) => {
     const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState('');
     const [textContent, setTextContent] = useState('');
-    const [currentStep, setCurrentStep] = useState(1); // 1: Identify titles, 2: Edit titles
+    const [currentStep, setCurrentStep] = useState(1);
     const [identifiedTitles, setIdentifiedTitles] = useState([]);
 
     useEffect(() => {
         if (isOpen) {
-            // Reset state when modal opens
             setTextContent('');
             setError('');
             setCurrentStep(1);
@@ -823,17 +774,216 @@ ${textContent}
     );
 };
 
+// [NOVO] Componente para o painel de relatórios
+const ReportsDashboard = () => {
+    const [reportData, setReportData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [studentsPerTerm, setStudentsPerTerm] = useState([]);
+    const [costs, setCosts] = useState(0); // Custo operacional editável
 
-const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, userProgress }) => {
+    const formatCurrency = (value) => {
+        return (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    const fetchData = async (currentCosts) => {
+        setLoading(true);
+        try {
+            const { data: studentsData, error: studentsError } = await supabase.rpc('get_students_per_term');
+            if (studentsError) throw studentsError;
+            setStudentsPerTerm(studentsData);
+
+            const { data: statsData, error: statsError } = await supabase.rpc('get_admin_dashboard_stats', { operational_costs: currentCosts });
+            if (statsError) throw statsError;
+            setReportData(statsData);
+
+        } catch (error) {
+            console.error("Erro ao carregar dados do admin:", error);
+            alert("Não foi possível carregar os relatórios.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData(costs);
+    }, []);
+
+    const handleCostsChange = (e) => {
+        const value = e.target.value;
+        setCosts(value === '' ? 0 : parseFloat(value));
+    };
+
+    const handleUpdateCosts = () => {
+        fetchData(costs);
+    };
+
+    if (loading) {
+        return <div className="loader-container"><div className="loader"></div></div>;
+    }
+
+    if (!reportData) {
+        return <div>Não foi possível carregar os dados.</div>
+    }
+
+    return (
+        <div className="admin-reports">
+            <div className="stat-cards-grid">
+                <div className="stat-card"><h4>Faturamento Bruto Mensal</h4><p>{formatCurrency(reportData.total_revenue_monthly)}</p></div>
+                <div className="stat-card"><h4>Lucro Líquido Mensal</h4><p>{formatCurrency(reportData.net_profit_monthly)}</p></div>
+                <div className="stat-card"><h4>Total de Alunos Ativos</h4><p>{reportData.total_students}</p></div>
+                <div className="stat-card"><h4>Custo por Aluno</h4><p>{formatCurrency(reportData.monthly_price_per_student)}</p></div>
+            </div>
+
+            <div className="admin-section">
+                <h2>Alunos por Período</h2>
+                <table className="admin-table">
+                    <thead><tr><th>Período</th><th>Nº de Alunos</th></tr></thead>
+                    <tbody>
+                        {studentsPerTerm.map(term => (
+                            <tr key={term.term_id}><td>{term.term_name}</td><td>{term.student_count}</td></tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="admin-section">
+                <h2>Cálculo de Lucro e Comissões</h2>
+                 <div className="costs-input-section">
+                    <label htmlFor="costs-input">Custos Operacionais Mensais (ex: servidor, ferramentas)</label>
+                    <div className="input-group">
+                        <input id="costs-input" type="number" value={costs} onChange={handleCostsChange} className="input" placeholder="R$ 0,00" />
+                        <button onClick={handleUpdateCosts} className="btn btn-primary">Recalcular Lucro</button>
+                    </div>
+                </div>
+                <table className="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Embaixador</th>
+                            <th>Período</th>
+                            <th>Alunos no Período</th>
+                            <th>% Comissão</th>
+                            <th>Valor a Pagar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {reportData.embaixador_commissions_details?.map((detail, index) => (
+                            <tr key={index}>
+                                <td>{detail.embaixador_email}</td>
+                                <td>{detail.term_name}</td>
+                                <td>{detail.students_in_term}</td>
+                                <td>{detail.commission_percentage}%</td>
+                                <td>{formatCurrency(detail.commission_to_pay)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+
+// [ALTERADO] PAINEL ADMINISTRATIVO COM ABAS
+const AdminPanel = ({ onBack }) => {
+    const [activeTab, setActiveTab] = useState('reports'); // 'reports' ou 'users'
+
+    const UserManagementPanel = () => {
+        const [users, setUsers] = useState([]);
+        const [loadingUsers, setLoadingUsers] = useState(true);
+
+        const fetchUsers = async () => {
+            setLoadingUsers(true);
+            try {
+                const { data, error } = await supabase.from('profiles').select('id, email, role, status').order('email');
+                if (error) throw error;
+                setUsers(data || []);
+            } catch (error) {
+                console.error("Erro ao carregar usuários:", error);
+                alert("Não foi possível carregar a lista de usuários.");
+            } finally {
+                setLoadingUsers(false);
+            }
+        };
+
+        const handleUpdateUserStatus = async (userId, newStatus) => {
+            const { error } = await supabase.from('profiles').update({ status: newStatus }).eq('id', userId);
+            if (error) {
+                alert(`Falha ao atualizar o status do usuário: ${error.message}`);
+            } else {
+                fetchUsers();
+            }
+        };
+
+        useEffect(() => {
+            fetchUsers();
+        }, []);
+
+        if (loadingUsers) return <div className="loader"></div>;
+
+        return (
+            <div className="admin-section">
+                <h2>Gerenciamento de Usuários</h2>
+                 <table className="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {users.filter(u => u.role !== 'admin').map(user => (
+                            <tr key={user.id}>
+                                <td>{user.email}</td>
+                                <td>
+                                    <span className={`status-badge status-${user.status || 'default'}`}>
+                                        {user.status === 'pending_approval' ? 'Pendente' : user.status === 'active' ? 'Ativo' : user.status === 'blocked' ? 'Bloqueado' : 'Indefinido'}
+                                    </span>
+                                </td>
+                                <td className="user-actions">
+                                    {user.status !== 'active' && <button className="btn btn-sm btn-success" onClick={() => handleUpdateUserStatus(user.id, 'active')}>Liberar</button>}
+                                    {user.status !== 'blocked' && <button className="btn btn-sm btn-danger" onClick={() => handleUpdateUserStatus(user.id, 'blocked')}>Bloquear</button>}
+                                    {user.status === 'blocked' && <button className="btn btn-sm btn-secondary" onClick={() => handleUpdateUserStatus(user.id, 'active')}>Desbloquear</button>}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        );
+    };
+
+    return (
+        <div className="container admin-panel">
+            <div className="dashboard-header">
+                <h1>Painel Administrativo</h1>
+                <button className="btn btn-secondary" onClick={onBack}>Voltar</button>
+            </div>
+            <nav className="tabs-nav admin-tabs">
+                <button className={`tab-button ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>Relatórios</button>
+                <button className={`tab-button ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>Usuários</button>
+            </nav>
+            <div className="tab-content">
+                {activeTab === 'reports' && <ReportsDashboard />}
+                {activeTab === 'users' && <UserManagementPanel />}
+            </div>
+        </div>
+    );
+};
+
+
+const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, completedSummaries, onNavigateToAdmin }) => {
   const isSearching = searchQuery.trim() !== '';
+  const isAdminOrAmbassador = user.role === 'admin' || user.role === 'embaixador';
 
   return (
     <div className="container dashboard">
       <div className="dashboard-header">
         <h1>{isSearching ? "Resultados da Busca" : "Início"}</h1>
         <div className="header-actions">
+            {/* [ALTERADO] Apenas admins podem ver o painel */}
+            {user.role === 'admin' && <button className="btn btn-primary" onClick={onNavigateToAdmin}>Painel Admin</button>}
             <ThemeToggle theme={theme} toggleTheme={toggleTheme}/>
-            {userProgress.streak > 0 && <div className="streak-display">🔥 {userProgress.streak}</div>}
             <button className="btn btn-secondary" onClick={onLogout}>Sair</button>
         </div>
       </div>
@@ -880,23 +1030,24 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
             </div>
           )}
 
+          {/* [ALTERADO] Admins e Embaixadores podem adicionar disciplinas */}
           <div className="add-subject-button-container">
-              {user.role === 'admin' && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
+              {isAdminOrAmbassador && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
           </div>
 
           <div className="subject-grid">
             {subjects.map(subject => {
               const subjectSummaries = searchResults.allSummaries.filter(s => s.subject_id === subject.id);
-              const completedCount = subjectSummaries.filter(s => userProgress.completedSummaries.includes(s.id)).length;
+              const completedCount = subjectSummaries.filter(s => completedSummaries.includes(s.id)).length;
               const progress = subjectSummaries.length > 0 ? (completedCount / subjectSummaries.length) * 100 : 0;
               return (
                 <div key={subject.id} className="subject-card" style={{ backgroundColor: subject.color }} onClick={() => onSelectSubject(subject)}>
-                  <div><h3>{subject.name}</h3></div>
+                  <h3>{subject.name}</h3>
                   <div className="subject-card-progress">
                     <p>{completedCount} de {subjectSummaries.length} concluídos</p>
                     <div className="progress-bar"><div className="progress-bar-inner" style={{ width: `${progress}%` }}></div></div>
                   </div>
-                  {user.role === 'admin' && (
+                  {isAdminOrAmbassador && (
                     <div className="card-actions">
                       <IconButton onClick={(e) => onEditSubject(subject)}><EditIcon /></IconButton>
                       <IconButton onClick={(e) => onDeleteSubject(subject.id)}><DeleteIcon /></IconButton>
@@ -914,26 +1065,27 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
 const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user, terms }) => {
     const [name, setName] = useState('');
     const [selectedTermId, setSelectedTermId] = useState('');
+    const isAdminOrAmbassador = user?.role === 'admin' || user?.role === 'embaixador';
 
     useEffect(() => {
         if (isOpen) {
-            setName(subject ? subject.name : '');
-            setSelectedTermId(subject ? subject.term_id : (user?.role === 'admin' ? '' : user?.term_id));
+            setName(subject?.name || '');
+            setSelectedTermId(subject?.term_id || (isAdminOrAmbassador ? '' : user?.term_id));
         }
-    }, [isOpen, subject, user]);
+    }, [isOpen, subject, user, isAdminOrAmbassador]);
 
     if (!isOpen) return null;
 
     const handleSubmit = (e) => {
         e.preventDefault();
 
-        if (user?.role === 'admin' && !selectedTermId) {
+        if (isAdminOrAmbassador && !selectedTermId) {
             alert('Por favor, selecione um período para esta disciplina.');
             return;
         }
 
-        const finalColor = (subject && subject.color) ? subject.color : getNewSubjectColor(existingSubjects);
-        const termIdToSave = user?.role === 'admin' ? selectedTermId : user?.term_id;
+        const finalColor = subject?.color || getNewSubjectColor(existingSubjects);
+        const termIdToSave = isAdminOrAmbassador ? selectedTermId : user?.term_id;
 
         onSave({ ...subject, name, color: finalColor, term_id: termIdToSave });
     };
@@ -948,7 +1100,7 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
                         <input id="subject-name" className="input" type="text" value={name} onChange={e => setName(e.target.value)} required />
                     </div>
 
-                    {user?.role === 'admin' && (
+                    {isAdminOrAmbassador && (
                         <div className="form-group">
                             <label htmlFor="term-select-subject">Período</label>
                             <select
@@ -1070,7 +1222,7 @@ const SummaryModal = ({ isOpen, onClose, onSave, summary, subjectId }) => {
     );
 };
 
-const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, onEditSummary, onDeleteSummary, user, userProgress, onAISplit, onReorderSummaries, onGenerateFlashcardsForAll, onGenerateQuizForAll, isBatchLoading, batchLoadingMessage }) => {
+const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, onEditSummary, onDeleteSummary, user, completedSummaries, onAISplit, onReorderSummaries, onGenerateFlashcardsForAll, onGenerateQuizForAll, isBatchLoading, batchLoadingMessage }) => {
     const handleDragEnd = (result) => {
         const { destination, source } = result;
         if (!destination || (destination.droppableId === source.droppableId && destination.index === source.index)) {
@@ -1078,12 +1230,13 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
         }
         onReorderSummaries(source.index, destination.index);
     };
+    const isAdminOrAmbassador = user.role === 'admin' || user.role === 'embaixador';
 
     return (
         <div className="container summary-list-view">
             <div className="dashboard-header">
                 <h1>{subject.name}</h1>
-                 {user.role === 'admin' && (
+                 {isAdminOrAmbassador && (
                     isBatchLoading ? (
                          <div className="batch-loader">
                             <div className="loader-sm"></div>
@@ -1110,9 +1263,9 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
                         {(provided) => (
                             <ul className="summary-list" {...provided.droppableProps} ref={provided.innerRef}>
                                 {summaries.map((summary, index) => {
-                                    const isCompleted = userProgress.completedSummaries.includes(summary.id);
+                                    const isCompleted = completedSummaries.includes(summary.id);
                                     return (
-                                        <Draggable key={summary.id} draggableId={String(summary.id)} index={index} isDragDisabled={user.role !== 'admin'}>
+                                        <Draggable key={summary.id} draggableId={String(summary.id)} index={index} isDragDisabled={!isAdminOrAmbassador}>
                                             {(provided, snapshot) => (
                                                 <li
                                                     ref={provided.innerRef}
@@ -1125,7 +1278,7 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
                                                         {isCompleted && <span className="completion-check"><CheckCircleIcon /></span>}
                                                         {summary.title}
                                                     </div>
-                                                    {user.role === 'admin' && (
+                                                    {isAdminOrAmbassador && (
                                                         <div className="summary-list-item-actions">
                                                             <IconButton onClick={() => onEditSummary(summary)}><EditIcon/></IconButton>
                                                             <IconButton onClick={() => onDeleteSummary(summary.id)}><DeleteIcon/></IconButton>
@@ -1145,7 +1298,7 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
                 <div className="empty-state">
                     <h2>Nenhum resumo aqui ainda</h2>
                     <p>Que tal começar adicionando o primeiro resumo para esta disciplina?</p>
-                    {user.role === 'admin' && (
+                    {isAdminOrAmbassador && (
                         <div className="empty-state-actions">
                              <button className="btn btn-secondary" onClick={onAISplit}>Adicionar Resumos em Lote</button>
                             <button className="btn btn-primary" onClick={onAddSummary}>Criar Manualmente</button>
@@ -1239,7 +1392,7 @@ const FlashcardView = ({ flashcards, summaryId }) => {
         setCurrentIndex(0);
         setIsFlipped(false);
         setIsFinished(false);
-    }, [summaryId]);
+    }, [flashcards, summaryId]);
 
     const handleFlip = () => setIsFlipped(prev => !prev);
 
@@ -1256,21 +1409,15 @@ const FlashcardView = ({ flashcards, summaryId }) => {
                     setCurrentIndex(currentIndex % newDeck.length);
                 }
             } else {
-                const currentCard = deck[currentIndex];
-                const remainingDeck = deck.filter((_, index) => index !== currentIndex);
-                const newDeck = [...remainingDeck, currentCard];
-                setDeck(newDeck);
-                if (deck.length > 1) {
-                    setCurrentIndex(currentIndex % (deck.length -1));
-                }
+                setCurrentIndex((currentIndex + 1) % deck.length);
             }
-        }, 600);
+        }, 300);
     };
 
     const handleAnswer = (knows) => {
         if (!isFlipped) {
             setIsFlipped(true);
-            setTimeout(() => processAnswer(knows), 1500);
+            setTimeout(() => processAnswer(knows), 1000);
         } else {
             processAnswer(knows);
         }
@@ -1388,6 +1535,7 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
     const [activeTab, setActiveTab] = useState('summary');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isTocVisible, setIsTocVisible] = useState(true);
+    const isAdminOrAmbassador = user.role === 'admin' || user.role === 'embaixador';
 
     useEffect(() => {
         setIsTocVisible(true);
@@ -1412,8 +1560,8 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
     const availableTabs = [
         { id: 'summary', label: 'Resumo', condition: true },
         { id: 'video', label: 'Vídeo', condition: !!summary.video },
-        { id: 'flashcards', label: 'Flashcards', condition: (summary.flashcards && summary.flashcards.length > 0) || user.role === 'admin' },
-        { id: 'questions', label: 'Questões', condition: (summary.questions && summary.questions.length > 0) || user.role === 'admin' }
+        { id: 'flashcards', label: 'Flashcards', condition: (summary.flashcards?.length > 0) || isAdminOrAmbassador },
+        { id: 'questions', label: 'Questões', condition: (summary.questions?.length > 0) || isAdminOrAmbassador }
     ].filter(tab => tab.condition);
 
     return (
@@ -1432,7 +1580,7 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
                             {isCompleted ? <CheckCircleIcon /> : null}
                             {isCompleted ? 'Concluído' : 'Marcar como Concluído'}
                         </button>
-                        {user.role === 'admin' && (
+                        {isAdminOrAmbassador && (
                             <>
                                 <button className="btn btn-secondary" onClick={onAIUpdate}><SparklesIcon />Atualizar com IA</button>
                                 <IconButton onClick={onEdit}><EditIcon/></IconButton>
@@ -1462,116 +1610,70 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
                         role="tabpanel"
                         className={`summary-content ${activeTab === 'summary' ? '' : 'hidden'}`}
                         style={{ '--subject-color': subject?.color || '#6c757d' }}
-                        dangerouslySetInnerHTML={{ __html: summary.content }}
-                    />
-
-                    <div
-                        id="tab-panel-video"
-                        role="tabpanel"
-                        className={activeTab === 'video' ? '' : 'hidden'}
                     >
+                        <ProtectedContent>
+                            <div dangerouslySetInnerHTML={{ __html: summary.content }} />
+                        </ProtectedContent>
+                    </div>
+
+                    <div id="tab-panel-video" role="tabpanel" className={activeTab === 'video' ? '' : 'hidden'}>
                         {summary.video && <GoogleDrivePlayer url={summary.video} />}
                     </div>
 
-                    <div
-                        id="tab-panel-flashcards"
-                        role="tabpanel"
-                        className={activeTab === 'flashcards' ? '' : 'hidden'}
-                    >
-                        {(summary.flashcards && summary.flashcards.length > 0) ? (
-                            <>
-                                <FlashcardView flashcards={summary.flashcards} summaryId={summary.id} />
-                                {user.role === 'admin' && (
-                                    <div className="update-content-container">
-                                         <button
-                                            className="btn btn-secondary"
-                                            onClick={handleGenerateFlashcards}
-                                            disabled={isGenerating}
-                                        >
-                                            {isGenerating ? 'Atualizando...' : 'Atualizar Flashcards existentes'}
+                    <div id="tab-panel-flashcards" role="tabpanel" className={activeTab === 'flashcards' ? '' : 'hidden'}>
+                        <ProtectedContent>
+                            {(summary.flashcards?.length > 0) ? (
+                                <>
+                                    <FlashcardView flashcards={summary.flashcards} summaryId={summary.id} />
+                                    {isAdminOrAmbassador && (
+                                        <div className="update-content-container">
+                                             <button className="btn btn-secondary" onClick={handleGenerateFlashcards} disabled={isGenerating}>
+                                                {isGenerating ? 'Atualizando...' : 'Atualizar Flashcards'}
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                isAdminOrAmbassador && (
+                                    <div className="quiz-container empty-quiz">
+                                        <p>Ainda não há flashcards para este resumo.</p>
+                                        <button className="btn btn-primary" onClick={handleGenerateFlashcards} disabled={isGenerating}>
+                                            {isGenerating ? 'Gerando Flashcards...' : 'Gerar Flashcards com IA'}
                                         </button>
                                     </div>
-                                )}
-                            </>
-                        ) : (
-                            user.role === 'admin' && (
-                                <div className="quiz-container empty-quiz">
-                                    <p>Ainda não há flashcards para este resumo.</p>
-                                    <button
-                                        className="btn btn-primary"
-                                        onClick={handleGenerateFlashcards}
-                                        disabled={isGenerating}
-                                    >
-                                        {isGenerating ? 'Gerando Flashcards...' : 'Gerar Flashcards com IA'}
-                                    </button>
-                                </div>
-                            )
-                        )}
+                                )
+                            )}
+                        </ProtectedContent>
                     </div>
 
-                    <div
-                        id="tab-panel-questions"
-                        role="tabpanel"
-                        className={activeTab === 'questions' ? '' : 'hidden'}
-                    >
-                        {summary.questions && summary.questions.length > 0 ? (
-                             <>
-                                <QuizView questions={summary.questions} onGetExplanation={onGetExplanation} />
-                                {user.role === 'admin' && (
-                                    <div className="update-content-container">
-                                        <button
-                                            className="btn btn-secondary"
-                                            onClick={handleGenerateQuiz}
-                                            disabled={isGenerating}
-                                        >
-                                            {isGenerating ? 'Atualizando...' : 'Atualizar Questões existentes'}
+                    <div id="tab-panel-questions" role="tabpanel" className={activeTab === 'questions' ? '' : 'hidden'}>
+                        <ProtectedContent>
+                            {summary.questions?.length > 0 ? (
+                                 <>
+                                    <QuizView questions={summary.questions} onGetExplanation={onGetExplanation} />
+                                    {isAdminOrAmbassador && (
+                                        <div className="update-content-container">
+                                            <button className="btn btn-secondary" onClick={handleGenerateQuiz} disabled={isGenerating}>
+                                                {isGenerating ? 'Atualizando...' : 'Atualizar Questões'}
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                isAdminOrAmbassador && (
+                                    <div className="quiz-container empty-quiz">
+                                        <p>Ainda não há questões para este resumo.</p>
+                                        <button className="btn btn-primary" onClick={handleGenerateQuiz} disabled={isGenerating}>
+                                            {isGenerating ? 'Gerando Quiz...' : 'Gerar Quiz com IA'}
                                         </button>
                                     </div>
-                                )}
-                            </>
-                        ) : (
-                            user.role === 'admin' && (
-                                <div className="quiz-container empty-quiz">
-                                    <p>Ainda não há questões para este resumo.</p>
-                                    <button
-                                        className="btn btn-primary"
-                                        onClick={handleGenerateQuiz}
-                                        disabled={isGenerating}
-                                    >
-                                        {isGenerating ? 'Gerando Quiz...' : 'Gerar Quiz com IA'}
-                                    </button>
-                                </div>
-                            )
-                        )}
+                                )
+                            )}
+                        </ProtectedContent>
                     </div>
                 </div>
             </div>
         </div>
-    );
-};
-
-const HamburgerIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="3" y1="12" x2="21" y2="12"></line>
-        <line x1="3" y1="6" x2="21" y2="6"></line>
-        <line x1="3" y1="18" x2="21" y2="18"></line>
-    </svg>
-);
-
-const Sidebar = ({ isOpen, onClose, title, children }) => {
-    return (
-        <>
-            <div className={`sidebar-overlay ${isOpen ? 'open' : ''}`} onClick={onClose}></div>
-            <div className={`sidebar ${isOpen ? 'open' : ''}`}>
-                <div className="sidebar-header">
-                    <h3>{title}</h3>
-                    <button className="close-btn" onClick={onClose}>×</button>
-                </div>
-                <div className="sidebar-content">
-                    {children}
-                </div>
-            </div>
-        </>
     );
 };
 
@@ -1616,56 +1718,91 @@ const TermSelector = ({ user, terms, onTermUpdate }) => {
     );
 };
 
-// --- [NOVO] Componente para incentivar a assinatura ---
-const SubscriptionPromptScreen = () => {
-    const redirectToCheckout = () => {
-        // !! IMPORTANTE !!
-        // Substitua pela URL real do seu plano de assinatura do Mercado Pago
-        const mercadoPagoCheckoutUrl = 'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=fa9742c919ac44d793ad723d66d9feae';
-        window.location.href = mercadoPagoCheckoutUrl;
-    };
-
-    return (
-        <div className="login-screen">
-            <div className="login-card">
-                <h1>Med<span>flix</span></h1>
-                <h2>Acesse todo o conteúdo</h2>
-                <p>
-                    Para continuar, inicie sua assinatura. Você terá <strong>7 dias de teste gratuito</strong> para explorar
-                    toda a plataforma. Cancele quando quiser.
-                </p>
-                <button onClick={redirectToCheckout} className="btn btn-primary" style={{marginTop: '1rem', width: '100%'}}>
-                    Iniciar Teste Gratuito
-                </button>
-                <button className="btn btn-secondary" onClick={() => supabase.auth.signOut()} style={{marginTop: '0.5rem', width: '100%'}}>
-                    Sair
-                </button>
+// --- TELAS DE STATUS DO USUÁRIO ---
+const PendingApprovalScreen = () => (
+    <div className="login-screen">
+        <div className="login-card">
+            <h1>Med<span>flix</span></h1>
+            <h2>Aguardando Liberação</h2>
+            <p style={{ textAlign: 'center', lineHeight: '1.6' }}>
+                Seu cadastro foi recebido. Para concluir e liberar seu acesso, entre em contato pelo WhatsApp com o número abaixo e envie seu comprovante de pagamento.
+            </p>
+            <div className="contact-info">
+                <strong>(14) 99872-9882</strong>
             </div>
+            <a
+                href="https://wa.me/5514998729882"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-primary"
+                style={{marginTop: '1.5rem', width: '100%', textDecoration: 'none'}}
+            >
+                Contatar Suporte via WhatsApp
+            </a>
+            <button className="btn btn-secondary" onClick={() => supabase.auth.signOut()} style={{marginTop: '0.5rem', width: '100%'}}>
+                Sair
+            </button>
         </div>
-    );
+    </div>
+);
+
+const BlockedScreen = () => (
+    <div className="login-screen">
+        <div className="login-card">
+            <h1>Med<span>flix</span></h1>
+            <h2>Acesso Bloqueado</h2>
+            <p>Sua conta foi bloqueada. Por favor, entre em contato com o suporte para mais informações.</p>
+            <button className="btn btn-secondary" onClick={() => supabase.auth.signOut()} style={{marginTop: '1rem', width: '100%'}}>
+                Sair
+            </button>
+        </div>
+    </div>
+);
+
+// --- COMPONENTE DE PROTEÇÃO DE CONTEÚDO ---
+const ProtectedContent = ({ children }) => {
+  const preventActions = (e) => e.preventDefault();
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    const element = wrapperRef.current;
+    if (element) {
+      element.addEventListener('contextmenu', preventActions);
+      element.addEventListener('copy', preventActions);
+      element.addEventListener('selectstart', preventActions);
+    }
+    return () => {
+      if (element) {
+        element.removeEventListener('contextmenu', preventActions);
+        element.removeEventListener('copy', preventActions);
+        element.removeEventListener('selectstart', preventActions);
+      }
+    };
+  }, []);
+
+  return <div ref={wrapperRef}>{children}</div>;
 };
 
 
-// --- [ATUALIZADO E CORRIGIDO] COMPONENTE PRINCIPAL APP ---
+// --- COMPONENTE PRINCIPAL APP ---
 const App = () => {
-  // State de Autenticação e UI
+  // States de UI e Autenticação
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
-  const [subscription, setSubscription] = useState(null); // State para a assinatura do usuário
-  const [loading, setLoading] = useState(true); // Começa como true
+  const [loading, setLoading] = useState(true);
   const [terms, setTerms] = useState([]);
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
   const [view, setView] = useState('dashboard');
   const [currentSubjectId, setCurrentSubjectId] = useState(null);
   const [currentSummaryId, setCurrentSummaryId] = useState(null);
 
-  // State de Dados
+  // States de Dados
   const [subjects, setSubjects] = useState([]);
   const [summaries, setSummaries] = useState([]);
-  const [userProgress, setUserProgress] = useState({ completedSummaries: [], lastCompletionDate: null, streak: 0 });
+  const [completedSummaries, setCompletedSummaries] = useState([]);
   const [lastViewed, setLastViewed] = useState([]);
 
-  // State de Modais e Loading
+  // States de Modais e Loading
   const [isSubjectModalOpen, setSubjectModalOpen] = useState(false);
   const [isSummaryModalOpen, setSummaryModalOpen] = useState(false);
   const [isAISplitterModalOpen, setAISplitterModalOpen] = useState(false);
@@ -1674,71 +1811,56 @@ const App = () => {
   const [editingSummary, setEditingSummary] = useState(null);
   const [isBatchLoading, setIsBatchLoading] = useState(false);
   const [batchLoadingMessage, setBatchLoadingMessage] = useState('');
-
-  // State de Busca
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTermForAdmin, setSelectedTermForAdmin] = useState(null);
 
-  // useEffect para verificar a sessão inicial e configurar o listener
+
+  const fetchUserProgress = async (userId) => {
+    const { data, error } = await supabase.from('user_summary_progress').select('summary_id').eq('user_id', userId);
+    if (error) console.error("Erro ao buscar progresso do usuário:", error);
+    else setCompletedSummaries(data.map(item => item.summary_id));
+  };
+
   useEffect(() => {
-    // Função async para checar a sessão inicial e qualquer mudança de estado (login/logout)
     const checkUserSession = async () => {
+      setLoading(true);
       try {
-        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
         setSession(currentSession);
 
         if (currentSession?.user) {
-            // Se HÁ uma sessão, busca todos os dados necessários
-            const { data: profileData, error: profileError } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', currentSession.user.id)
-                .single();
-            if (profileError) throw profileError;
-
+            const { data: profileData } = await supabase.from('profiles').select('*').eq('id', currentSession.user.id).single();
             const fullUser = { ...currentSession.user, ...profileData };
             setUser(fullUser);
 
-            const { data: subscriptionData, error: subscriptionError } = await supabase
-                .from('subscriptions')
-                .select('*')
-                .eq('user_id', currentSession.user.id)
-                .in('status', ['trialing', 'active'])
-                .single();
-
-            if (subscriptionError && subscriptionError.code !== 'PGRST116') {
-                throw subscriptionError;
-            }
-            setSubscription(subscriptionData);
-
-            if (fullUser.term_id) {
-                await fetchAppData(fullUser.term_id);
+            if (fullUser.status === 'active') {
+                await fetchUserProgress(currentSession.user.id);
+                // [ALTERADO] Lógica de carregamento de dados baseada no papel
+                if (fullUser.role === 'admin') {
+                    // Admin carrega tudo, não precisa de term_id
+                    await fetchAppData(null, fullUser.role);
+                } else if (fullUser.term_id) {
+                    // Embaixador ou estudante carrega dados do seu próprio período
+                    await fetchAppData(fullUser.term_id, fullUser.role);
+                }
             }
         } else {
-            // Se NÃO HÁ sessão (usuário fez logout ou a sessão expirou)
-            // Limpa o estado para redirecionar para a tela de login
             setUser(null);
-            setSubscription(null);
             setSubjects([]);
             setSummaries([]);
+            setCompletedSummaries([]);
         }
       } catch (error) {
-        console.error("Erro ao verificar a sessão do usuário:", error);
-        // Em caso de erro, limpa o estado para garantir a tela de login
+        console.error("Erro ao verificar sessão:", error);
         setUser(null);
-        setSubscription(null);
       } finally {
         setLoading(false);
       }
     };
 
-    // Executa a verificação na montagem inicial do componente
     checkUserSession();
 
-    // Listener para mudanças de estado (login, logout)
     const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange((_event, session) => {
-        // Se houver mudança, re-executa a lógica de verificação
         checkUserSession();
     });
 
@@ -1748,69 +1870,47 @@ const App = () => {
     };
     fetchTerms();
 
-    // Limpa o listener quando o componente é desmontado
-    return () => {
-        authListener.unsubscribe();
-    };
+    return () => authListener.unsubscribe();
   }, []);
 
-  // Função para buscar dados principais da aplicação
-  const fetchAppData = async (termId) => {
-      const { data: subjectsData } = await supabase.from('subjects').select('*').eq('term_id', termId);
-      setSubjects(subjectsData || []);
 
-      const { data: summariesData } = await supabase.from('summaries').select('*').order('position', { ascending: true });
+  const fetchAppData = async (termId, userRole) => {
+    let subjectsQuery = supabase.from('subjects').select('*');
+    // [ALTERADO] Admin vê disciplinas de todos os períodos
+    if (userRole !== 'admin') {
+        subjectsQuery = subjectsQuery.eq('term_id', termId);
+    }
+    const { data: subjectsData } = await subjectsQuery;
+    setSubjects(subjectsData || []);
 
-      const parseJsonField = (field, fallback = []) => {
-          if (typeof field === 'string') {
-              try {
-                  const parsed = JSON.parse(field);
-                  return Array.isArray(parsed) ? parsed : fallback;
-              } catch (e) { return fallback; }
-          }
-          return Array.isArray(field) ? field : fallback;
-      };
-
-      setSummaries(
-        (summariesData || []).map(s => ({
-          ...s,
-          questions: parseJsonField(s.questions, []),
-          flashcards: parseJsonField(s.flashcards, []),
-        }))
-      );
+    const { data: summariesData } = await supabase.from('summaries').select('*').order('position', { ascending: true });
+    const parseJsonField = (field, fallback = []) => {
+        if (typeof field === 'string') { try { const parsed = JSON.parse(field); return Array.isArray(parsed) ? parsed : fallback; } catch (e) { return fallback; } }
+        return Array.isArray(field) ? field : fallback;
+    };
+    setSummaries((summariesData || []).map(s => ({ ...s, questions: parseJsonField(s.questions), flashcards: parseJsonField(s.flashcards) })));
   }
 
-  // Busca dados do localStorage quando o usuário muda
+  useEffect(() => {
+    document.body.className = theme === 'light' ? 'light-mode' : '';
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
   useEffect(() => {
     if (user) {
-      const savedProgress = localStorage.getItem(`userProgress_${user.id}`);
-      if (savedProgress) setUserProgress(JSON.parse(savedProgress));
-
       const savedLastViewed = localStorage.getItem(`lastViewed_${user.id}`);
       if(savedLastViewed) setLastViewed(JSON.parse(savedLastViewed));
     }
   }, [user]);
 
-  // Salva dados no localStorage
   useEffect(() => {
-    localStorage.setItem('theme', theme);
     if (user) {
-      localStorage.setItem(`userProgress_${user.id}`, JSON.stringify(userProgress));
       localStorage.setItem(`lastViewed_${user.id}`, JSON.stringify(lastViewed));
     }
-  }, [theme, userProgress, lastViewed, user]);
-
-  useEffect(() => {
-    document.body.className = theme === 'dark' ? '' : 'light-mode';
-  }, [theme]);
+  }, [lastViewed, user]);
 
   const handleLogout = () => supabase.auth.signOut();
-
-  const handleSelectSubject = (subject) => {
-    setCurrentSubjectId(subject.id);
-    setView('subject');
-  };
-
+  const handleSelectSubject = (subject) => { setCurrentSubjectId(subject.id); setView('subject'); };
   const handleSelectSummary = (summary) => {
     setCurrentSummaryId(summary.id);
     setView('summary');
@@ -1821,50 +1921,29 @@ const App = () => {
     });
   };
 
-  const handleBackToDashboard = () => {
-      setView('dashboard');
-      setCurrentSubjectId(null);
-      setCurrentSummaryId(null);
-  }
-  const handleBackToSubject = () => {
-      setCurrentSummaryId(null);
-      setView('subject');
-  };
+  const handleBackToDashboard = () => { setView('dashboard'); setCurrentSubjectId(null); setCurrentSummaryId(null); }
+  const handleBackToSubject = () => { setCurrentSummaryId(null); setView('subject'); };
 
   const handleTermUpdate = async (newTermId) => {
-      const { data, error } = await supabase
-          .from('profiles')
-          .update({ term_id: newTermId })
-          .eq('id', user.id)
-          .select()
-          .single();
-
-      if (error) {
-          alert("Erro ao salvar o termo.");
-      } else if (data) {
-          setUser(prevUser => ({ ...prevUser, ...data }));
-          fetchAppData(newTermId); // Recarrega os dados para o novo termo
+      const { data, error } = await supabase.from('profiles').update({ term_id: newTermId }).eq('id', user.id).select().single();
+      if (error) { alert("Erro ao salvar o termo."); }
+      else if (data) {
+          const updatedUser = { ...user, ...data };
+          setUser(updatedUser);
+          fetchAppData(newTermId, updatedUser.role);
       }
   };
 
   const handleSaveSubject = async (subjectData) => {
-    if (!subjectData.term_id) {
-        alert("Ocorreu um erro: o período da disciplina não foi especificado.");
-        return;
-    }
-
+    if (!subjectData.term_id) { alert("O período da disciplina não foi especificado."); return; }
     if (subjectData.id) {
-        const { data, error } = await supabase.from('subjects').update({ name: subjectData.name, color: subjectData.color, term_id: subjectData.term_id }).eq('id', subjectData.id).select();
+        const { data, error } = await supabase.from('subjects').update({ name: subjectData.name, color: subjectData.color, term_id: subjectData.term_id }).eq('id', subjectData.id).select().single();
         if (error) alert(error.message);
-        else if (data) setSubjects(subjects.map(s => s.id === data[0].id ? data[0] : s));
+        else if (data) setSubjects(subjects.map(s => s.id === data.id ? data : s));
     } else {
-        const { data, error } = await supabase.from('subjects').insert({ name: subjectData.name, color: subjectData.color, user_id: session.user.id, term_id: subjectData.term_id }).select();
+        const { data, error } = await supabase.from('subjects').insert({ name: subjectData.name, color: subjectData.color, user_id: session.user.id, term_id: subjectData.term_id }).select().single();
         if (error) alert(error.message);
-        else if (data) {
-            if (String(data[0].term_id) === String(user.term_id)) {
-                setSubjects([...subjects, data[0]]);
-            }
-        }
+        else if (data) setSubjects([...subjects, data]);
     }
     setSubjectModalOpen(false);
     setEditingSubject(null);
@@ -1883,36 +1962,18 @@ const App = () => {
   };
 
   const handleSaveSummary = async (summaryData) => {
-    const isNewSummary = !summaryData.id;
-    const summariesForSubject = summaries.filter(s => s.subject_id === summaryData.subject_id);
+    const isNew = !summaryData.id;
+    const position = isNew ? summaries.filter(s => s.subject_id === summaryData.subject_id).length : summaryData.position;
+    const payload = { ...summaryData, user_id: session.user.id, position };
 
-    const summaryPayload = {
-        title: summaryData.title,
-        content: summaryData.content,
-        video: summaryData.video,
-        subject_id: summaryData.subject_id,
-        user_id: session.user.id,
-        position: isNewSummary ? summariesForSubject.length : summaryData.position,
-    };
-
-    if (!isNewSummary) {
-        const { data, error } = await supabase.from('summaries')
-            .update({ title: summaryData.title, content: summaryData.content, video: summaryData.video })
-            .eq('id', summaryData.id)
-            .select()
-            .single();
-        if (error) {
-            alert(error.message);
-        } else if (data) {
-            setSummaries(summaries.map(s => s.id === data.id ? data : s));
-        }
+    if (isNew) {
+        const { data, error } = await supabase.from('summaries').insert(payload).select().single();
+        if (error) alert(error.message);
+        else if (data) setSummaries([...summaries, data]);
     } else {
-        const { data, error } = await supabase.from('summaries').insert(summaryPayload).select().single();
-        if (error) {
-            alert(error.message);
-        } else if (data) {
-            setSummaries([...summaries, data]);
-        }
+        const { data, error } = await supabase.from('summaries').update(payload).eq('id', summaryData.id).select().single();
+        if (error) alert(error.message);
+        else if (data) setSummaries(summaries.map(s => s.id === data.id ? data : s));
     }
     setSummaryModalOpen(false);
     setEditingSummary(null);
@@ -1922,379 +1983,210 @@ const App = () => {
       if (window.confirm("Tem certeza que deseja excluir este resumo?")) {
           const { error } = await supabase.from('summaries').delete().eq('id', summaryId);
           if (error) alert(error.message);
-          else {
-            setSummaries(summaries.filter(s => s.id !== summaryId));
-            handleBackToSubject();
-          }
+          else { setSummaries(summaries.filter(s => s.id !== summaryId)); handleBackToSubject(); }
       }
   };
 
   const handleSplitAndSaveSummaries = async (newSummaries) => {
-    if (!currentSubjectId) {
-        alert("Nenhuma disciplina selecionada.");
-        setAISplitterModalOpen(false);
-        return;
-    }
-    const summariesForSubject = summaries.filter(s => s.subject_id === currentSubjectId);
-    const startPosition = summariesForSubject.length;
-
-    const summariesPayload = newSummaries.map((summary, index) => ({
-        title: summary.title,
-        content: summary.content,
-        subject_id: currentSubjectId,
-        user_id: session.user.id,
-        position: startPosition + index,
-    }));
-
+    if (!currentSubjectId) { alert("Nenhuma disciplina selecionada."); setAISplitterModalOpen(false); return; }
+    const startPosition = summaries.filter(s => s.subject_id === currentSubjectId).length;
+    const summariesPayload = newSummaries.map((s, i) => ({ ...s, subject_id: currentSubjectId, user_id: session.user.id, position: startPosition + i }));
     const { data, error } = await supabase.from('summaries').insert(summariesPayload).select();
-
-    if (error) {
-        alert("Falha ao salvar os novos resumos. Tente novamente.");
-        console.error(error);
-    } else if (data) {
-        setSummaries(prevSummaries => [...prevSummaries, ...data]);
-        alert(`${data.length} resumos foram criados com sucesso!`);
-    }
-
+    if (error) { alert("Falha ao salvar os novos resumos."); console.error(error); }
+    else if (data) { setSummaries(prev => [...prev, ...data]); alert(`${data.length} resumos criados!`); }
     setAISplitterModalOpen(false);
   };
 
   const handleUpdateSummaryContent = async (summaryId, newContent) => {
-      const { data, error } = await supabase.from('summaries').update({ content: newContent }).eq('id', summaryId).select();
+      const { data, error } = await supabase.from('summaries').update({ content: newContent }).eq('id', summaryId).select().single();
       if (error) alert(error.message);
-      else if (data) setSummaries(summaries.map(s => s.id === data[0].id ? data[0] : s));
+      else if (data) setSummaries(summaries.map(s => s.id === data.id ? data : s));
       setAIUpdateModalOpen(false);
   };
 
   const handleReorderSummaries = async (startIndex, endIndex) => {
-    const currentSubjectSummaries = summaries
-      .filter(s => s.subject_id === currentSubjectId)
-      .sort((a, b) => a.position - b.position);
-
-    const [removed] = currentSubjectSummaries.splice(startIndex, 1);
-    currentSubjectSummaries.splice(endIndex, 0, removed);
-
-    const otherSummaries = summaries.filter(s => s.subject_id !== currentSubjectId);
-    const updatedSummariesForState = currentSubjectSummaries.map((s, index) => ({ ...s, position: index }));
-    setSummaries([...otherSummaries, ...updatedSummariesForState]);
-
-
-    const updates = updatedSummariesForState.map((summary, index) =>
-        supabase
-            .from('summaries')
-            .update({ position: index })
-            .eq('id', summary.id)
-    );
-
+    const subjectSummaries = summaries.filter(s => s.subject_id === currentSubjectId).sort((a, b) => a.position - b.position);
+    const [removed] = subjectSummaries.splice(startIndex, 1);
+    subjectSummaries.splice(endIndex, 0, removed);
+    const updatedSummaries = subjectSummaries.map((s, index) => ({ ...s, position: index }));
+    setSummaries(prev => [...prev.filter(s => s.subject_id !== currentSubjectId), ...updatedSummaries]);
+    const updates = updatedSummaries.map(s => supabase.from('summaries').update({ position: s.position }).eq('id', s.id));
     const { error } = await Promise.all(updates);
-    if (error) {
-        alert("Não foi possível salvar a nova ordem. Por favor, tente novamente.");
-    }
+    if (error) alert("Não foi possível salvar a nova ordem.");
   };
 
   const handleGenerateQuiz = async () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
-
     try {
-const prompt = `Você é um especialista em criar questões para provas de residência médica. Baseado estritamente no conteúdo do resumo a seguir, crie uma lista de no mínimo 10 questões de múltipla escolha de alto nível.
-As questões devem ser complexas, mesclando diferentes formatos (ex: caso clínico curto, "qual das seguintes NÃO é", etc.). Cada questão deve ter 4 alternativas plausíveis, mas apenas uma correta.
-Forneça também um comentário explicativo para a resposta correta, justificando-a com base no texto do resumo.
-
-**Resumo para extrair as questões:**
-"""
-${summary.content.replace(/<[^>]*>?/gm, ' ')}
-"""`;        const parsedJson = await generateAIContentWithRetry(prompt, quizSchema);
-
-        const { data, error } = await supabase.from('summaries')
-            .update({ questions: parsedJson.questions })
-            .eq('id', currentSummaryId)
-            .select()
-            .single();
-
+        const prompt = `Você é um especialista em criar questões para provas de residência médica. Baseado estritamente no conteúdo do resumo a seguir, crie uma lista de no mínimo 10 questões de múltipla escolha de alto nível. As questões devem ser complexas, mesclando diferentes formatos (ex: caso clínico curto, "qual das seguintes NÃO é", etc.). Cada questão deve ter 4 alternativas plausíveis, mas apenas uma correta. Forneça também um comentário explicativo para a resposta correta, justificando-a com base no texto do resumo. Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`;
+        const parsedJson = await generateAIContentWithRetry(prompt, quizSchema);
+        const { data, error } = await supabase.from('summaries').update({ questions: parsedJson.questions }).eq('id', currentSummaryId).select().single();
         if (error) throw error;
         setSummaries(summaries.map(s => s.id === currentSummaryId ? data : s));
-    } catch (e) {
-        console.error("Erro ao gerar/salvar quiz:", e);
-        alert("Falha ao gerar o quiz. O serviço pode estar ocupado. Tente novamente mais tarde.");
-    }
+    } catch (e) { console.error("Erro ao gerar/salvar quiz:", e); alert("Falha ao gerar o quiz."); }
   };
 
   const handleGenerateFlashcards = async () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
     try {
-const prompt = `Baseado no seguinte resumo sobre "${summary.title}", sua tarefa é criar um conjunto de flashcards para estudo e memorização.
-Cada flashcard deve ser claro e objetivo, no formato pergunta-e-resposta (frente e verso).
-Priorize conceitos-chave, definições, mecanismos de ação, causas, consequências, classificações e relações clínicas importantes.
-EVITE incluir valores específicos de exames laboratoriais ou dados numéricos que mudam com frequência. O foco é no conceito.
-Cada flashcard deve ser curto e direto para facilitar a memorização rápida.
-
-**Resumo para extrair os flashcards:**
-"""
-${summary.content.replace(/<[^>]*>?/gm, ' ')}
-"""`;        const parsedJson = await generateAIContentWithRetry(prompt, flashcardsSchema);
-
-        const { data, error } = await supabase.from('summaries')
-            .update({ flashcards: parsedJson.flashcards })
-            .eq('id', currentSummaryId)
-            .select()
-            .single();
-
+        const prompt = `Baseado no resumo sobre "${summary.title}", crie flashcards para estudo. Formato pergunta-e-resposta (frente e verso). Priorize conceitos-chave, definições, mecanismos, causas, consequências, classificações e relações clínicas. EVITE valores numéricos específicos. Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`;
+        const parsedJson = await generateAIContentWithRetry(prompt, flashcardsSchema);
+        const { data, error } = await supabase.from('summaries').update({ flashcards: parsedJson.flashcards }).eq('id', currentSummaryId).select().single();
         if (error) throw error;
-
         setSummaries(summaries.map(s => s.id === currentSummaryId ? data : s));
-
-    } catch (e) {
-        console.error("Erro ao gerar/salvar flashcards:", e);
-        alert("Falha ao gerar os flashcards. Tente novamente.");
-    }
+    } catch (e) { console.error("Erro ao gerar/salvar flashcards:", e); alert("Falha ao gerar os flashcards."); }
   };
 
-    const handleGenerateFlashcardsForAll = async () => {
-        const summariesToProcess = summaries.filter(s => s.subject_id === currentSubjectId && (!s.flashcards || s.flashcards.length === 0));
-        if (summariesToProcess.length === 0) {
-            alert("Não há resumos sem flashcards nesta disciplina.");
-            return;
-        }
+    const generateForAll = async (contentType) => {
+        const isFlashcards = contentType === 'flashcards';
+        const summariesToProcess = summaries.filter(s => s.subject_id === currentSubjectId && (!s[contentType] || s[contentType].length === 0));
+        if (summariesToProcess.length === 0) { alert(`Não há resumos sem ${contentType} nesta disciplina.`); return; }
 
         setIsBatchLoading(true);
         const updatedSummaries = [];
-
         try {
             for (let i = 0; i < summariesToProcess.length; i++) {
                 const summary = summariesToProcess[i];
-                setBatchLoadingMessage(`Gerando flashcards para "${summary.title}" (${i + 1}/${summariesToProcess.length})...`);
-const prompt = `Baseado no seguinte resumo sobre "${summary.title}", sua tarefa é criar um conjunto de flashcards para estudo e memorização.
-Cada flashcard deve ser claro e objetivo, no formato pergunta-e-resposta (frente e verso).
-Priorize conceitos-chave, definições, mecanismos de ação, causas, consequências, classificações e relações clínicas importantes.
-EVITE incluir valores específicos de exames laboratoriais ou dados numéricos que mudam com frequência. O foco é no conceito.
-Cada flashcard deve ser curto e direto para facilitar a memorização rápida.
-
-**Resumo para extrair os flashcards:**
-"""
-${summary.content.replace(/<[^>]*>?/gm, ' ')}
-"""`;
-                const parsedJson = await generateAIContentWithRetry(prompt, flashcardsSchema);
-                updatedSummaries.push({ id: summary.id, flashcards: parsedJson.flashcards });
+                setBatchLoadingMessage(`Gerando ${contentType} para "${summary.title}" (${i + 1}/${summariesToProcess.length})...`);
+                const prompt = isFlashcards ? `Baseado no resumo sobre "${summary.title}", crie flashcards para estudo...` : `Baseado no resumo, crie questões de múltipla escolha...`;
+                const schema = isFlashcards ? flashcardsSchema : quizSchema;
+                const parsedJson = await generateAIContentWithRetry(prompt.replace('...', `Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`), schema);
+                updatedSummaries.push({ id: summary.id, [contentType]: parsedJson[isFlashcards ? 'flashcards' : 'questions'] });
             }
-
             setBatchLoadingMessage("Salvando no banco de dados...");
-            const updatePromises = updatedSummaries.map(s =>
-                supabase.from('summaries').update({ flashcards: s.flashcards }).eq('id', s.id)
-            );
+            const updatePromises = updatedSummaries.map(s => supabase.from('summaries').update({ [contentType]: s[contentType] }).eq('id', s.id));
             await Promise.all(updatePromises);
-
-            setSummaries(prev => prev.map(summary => {
-                const updated = updatedSummaries.find(u => u.id === summary.id);
-                return updated ? { ...summary, flashcards: updated.flashcards } : summary;
-            }));
-
-            alert(`Flashcards gerados para ${updatedSummaries.length} resumos com sucesso!`);
-        } catch (e) {
-            console.error("Erro na geração em lote de flashcards:", e);
-            alert("Ocorreu um erro durante a geração em lote. Verifique o console.");
-        } finally {
-            setIsBatchLoading(false);
-            setBatchLoadingMessage('');
-        }
-    };
-
-    const handleGenerateQuizForAll = async () => {
-        const summariesToProcess = summaries.filter(s => s.subject_id === currentSubjectId && (!s.questions || s.questions.length === 0));
-        if (summariesToProcess.length === 0) {
-            alert("Não há resumos sem questões nesta disciplina.");
-            return;
-        }
-
-        setIsBatchLoading(true);
-        const updatedSummaries = [];
-
-        try {
-            for (let i = 0; i < summariesToProcess.length; i++) {
-                const summary = summariesToProcess[i];
-                 setBatchLoadingMessage(`Gerando questões para "${summary.title}" (${i + 1}/${summariesToProcess.length})...`);
-const prompt = `Você é um especialista em criar questões para provas de residência médica. Baseado estritamente no conteúdo do resumo a seguir, crie uma lista de no mínimo 10 questões de múltipla escolha de alto nível.
-As questões devem ser complexas, mesclando diferentes formatos (ex: caso clínico curto, "qual das seguintes NÃO é", etc.). Cada questão deve ter 4 alternativas plausíveis, mas apenas uma correta.
-Forneça também um comentário explicativo para a resposta correta, justificando-a com base no texto do resumo.
-
-**Resumo para extrair as questões:**
-"""
-${summary.content.replace(/<[^>]*>?/gm, ' ')}
-"""`;
-                const parsedJson = await generateAIContentWithRetry(prompt, quizSchema);
-                updatedSummaries.push({ id: summary.id, questions: parsedJson.questions });
-            }
-
-            setBatchLoadingMessage("Salvando no banco de dados...");
-            const updatePromises = updatedSummaries.map(s =>
-                supabase.from('summaries').update({ questions: s.questions }).eq('id', s.id)
-            );
-            await Promise.all(updatePromises);
-
-            setSummaries(prev => prev.map(summary => {
-                const updated = updatedSummaries.find(u => u.id === summary.id);
-                return updated ? { ...summary, questions: updated.questions } : summary;
-            }));
-
-            alert(`Questões geradas para ${updatedSummaries.length} resumos com sucesso!`);
-        } catch (e) {
-            console.error("Erro na geração em lote de questões:", e);
-            alert("Ocorreu um erro durante a geração em lote. Verifique o console.");
-        } finally {
-            setIsBatchLoading(false);
-            setBatchLoadingMessage('');
-        }
+            setSummaries(prev => prev.map(s => ({ ...s, ...updatedSummaries.find(u => u.id === s.id) })));
+            alert(`${contentType} gerados para ${updatedSummaries.length} resumos!`);
+        } catch (e) { console.error(`Erro na geração em lote de ${contentType}:`, e); alert("Ocorreu um erro durante a geração em lote."); }
+        finally { setIsBatchLoading(false); setBatchLoadingMessage(''); }
     };
 
    const handleGetExplanation = async (questionText, correctAnswer) => {
         const summary = summaries.find(s => s.id === currentSummaryId);
         if (!summary) return "Contexto não encontrado.";
-        const prompt = `Contexto do resumo: "${summary.content.replace(/<[^>]*>?/gm, ' ')}". Pergunta: "${questionText}". Resposta correta: "${correctAnswer}". Explique brevemente por que esta é a resposta correta.`;
-
+        const prompt = `Contexto: "${summary.content.replace(/<[^>]*>?/gm, ' ')}". Pergunta: "${questionText}". Resposta correta: "${correctAnswer}". Explique brevemente por que esta é a resposta correta.`;
         const parsedJson = await generateAIContentWithRetry(prompt, quizExplanationSchema);
         return parsedJson.explanation;
     };
 
-  const handleToggleComplete = () => {
-    const today = new Date().toISOString().split('T')[0];
-    const isCompleted = userProgress.completedSummaries.includes(currentSummaryId);
-    setUserProgress(prev => {
-        const completedSummaries = isCompleted ? prev.completedSummaries.filter(id => id !== currentSummaryId) : [...new Set([...prev.completedSummaries, currentSummaryId])];
-        if (isCompleted) return { ...prev, completedSummaries };
-        let { streak, lastCompletionDate } = prev;
-        if (lastCompletionDate !== today) {
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            streak = (lastCompletionDate === yesterday.toISOString().split('T')[0]) ? streak + 1 : 1;
+    const handleToggleComplete = async () => {
+        if (!user || !currentSummaryId) return;
+        const isCompleted = completedSummaries.includes(currentSummaryId);
+        if (isCompleted) {
+            const { error } = await supabase.from('user_summary_progress').delete().match({ user_id: user.id, summary_id: currentSummaryId });
+            if (!error) setCompletedSummaries(prev => prev.filter(id => id !== currentSummaryId));
+            else alert("Erro ao remover o progresso.");
+        } else {
+            const { error } = await supabase.from('user_summary_progress').insert({ user_id: user.id, summary_id: currentSummaryId });
+            if (!error) setCompletedSummaries(prev => [...prev, currentSummaryId]);
+            else alert("Erro ao salvar o progresso.");
         }
-        return { completedSummaries, streak, lastCompletionDate: today };
-    });
-  };
+    };
 
   const currentSubject = subjects.find(s => s.id === currentSubjectId);
   const currentSummary = summaries.find(s => s.id === currentSummaryId);
+  const summariesForCurrentSubject = useMemo(() => summaries.filter(s => s.subject_id === currentSubjectId).sort((a, b) => (a.position ?? 0) - (b.position ?? 0)), [summaries, currentSubjectId]);
 
-  const summariesForCurrentSubject = useMemo(() =>
-  summaries
-      .filter(s => s.subject_id === currentSubjectId)
-      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
-  [summaries, currentSubjectId]);
-
+  // [ALTERADO] Filtro de disciplinas visíveis para admin
+  const subjectsForUser = useMemo(() => {
+    if (user?.role === 'admin' && selectedTermForAdmin) {
+        return subjects.filter(s => s.term_id === selectedTermForAdmin);
+    }
+    return subjects;
+  }, [subjects, user, selectedTermForAdmin]);
 
   const searchResults = useMemo(() => {
     const allSummariesWithSubject = summaries.map(sum => ({ ...sum, subjectName: subjects.find(sub => sub.id === sum.subject_id)?.name || '' }));
     if (!searchQuery.trim()) return { subjects: [], summaries: [], allSummaries: summaries };
-    const lowerCaseQuery = searchQuery.toLowerCase();
-    const filteredSubjects = subjects.filter(sub => sub.name.toLowerCase().includes(lowerCaseQuery)).map(sub => ({ ...sub, summaryCount: summaries.filter(s => s.subject_id === sub.id).length }));
-    const filteredSummaries = allSummariesWithSubject.filter(sum => sum.title.toLowerCase().includes(lowerCaseQuery));
-    return { subjects: filteredSubjects, summaries: filteredSummaries, allSummaries: summaries };
-  }, [searchQuery, subjects, summaries]);
+    const q = searchQuery.toLowerCase();
+    return {
+        subjects: subjectsForUser.filter(s => s.name.toLowerCase().includes(q)).map(s => ({ ...s, summaryCount: summaries.filter(sum => sum.subject_id === s.id).length })),
+        summaries: allSummariesWithSubject.filter(s => s.title.toLowerCase().includes(q) && subjectsForUser.some(sub => sub.id === s.subject_id)),
+        allSummaries: summaries
+    };
+  }, [searchQuery, subjectsForUser, summaries, subjects]);
 
-  const lastViewedWithDetails = useMemo(() => {
-    return lastViewed.map(lv => {
-        const subject = subjects.find(s => s.id === lv.subject_id);
-        return { ...lv, subjectName: subject?.name || 'Disciplina Removida' };
-    }).filter(lv => subjects.find(s => s.id === lv.subject_id));
-  }, [lastViewed, subjects]);
+  const lastViewedWithDetails = useMemo(() => lastViewed.map(lv => ({ ...lv, subjectName: subjects.find(s => s.id === lv.subject_id)?.name || '...' })).filter(lv => subjects.some(s => s.id === lv.subject_id)), [lastViewed, subjects]);
 
-    const needsSubscription =
-      !subscription &&
-      user?.role !== 'administrador' &&
-      !user?.has_manual_access;
+    const AdminTermSelector = () => (
+        <div className="admin-term-selector">
+            <label htmlFor="term-selector">Visualizando Período:</label>
+            <select
+                id="term-selector"
+                className="select-input"
+                value={selectedTermForAdmin || ''}
+                onChange={(e) => setSelectedTermForAdmin(Number(e.target.value) || null)}
+            >
+                <option value="">Todos os Períodos</option>
+                {terms.map(term => <option key={term.id} value={term.id}>{term.name}</option>)}
+            </select>
+        </div>
+    );
 
     const renderContent = () => {
     if (loading) {
         return <div className="loader-container"><div className="loader"></div></div>;
     }
-
     if (!session || !user) {
-        return <LoginScreen theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />;
+        return <LoginScreen theme={theme} toggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} />;
     }
-
-    if (needsSubscription) {
-        return <SubscriptionPromptScreen />;
+    if (user.status === 'pending_approval') return <PendingApprovalScreen />;
+    if (user.status === 'blocked') return <BlockedScreen />;
+    if (user.status !== 'active') {
+        return <LoginScreen theme={theme} toggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} />;
     }
-
-    if (!user.term_id) {
+    if (!user.term_id && user.role !== 'admin') {
         return <TermSelector user={user} terms={terms} onTermUpdate={handleTermUpdate} />;
     }
 
     switch (view) {
       case 'dashboard':
-        const termName = terms.find(t => t.id === user.term_id)?.name || "Meu Período";
-        return <Dashboard user={user} termName={termName} onLogout={handleLogout} subjects={subjects} onSelectSubject={handleSelectSubject} onAddSubject={() => { setEditingSubject(null); setSubjectModalOpen(true); }} onEditSubject={(subject) => { setEditingSubject(subject); setSubjectModalOpen(true); }} onDeleteSubject={handleDeleteSubject} theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} searchQuery={searchQuery} onSearchChange={(e) => setSearchQuery(e.target.value)} searchResults={searchResults} onSelectSummary={handleSelectSummary} lastViewed={lastViewedWithDetails} userProgress={userProgress} />;
-
+        return (
+            <>
+                {user.role === 'admin' && <AdminTermSelector />}
+                <Dashboard user={user} termName={terms.find(t => t.id === user.term_id)?.name} onLogout={handleLogout} subjects={subjectsForUser} onSelectSubject={handleSelectSubject} onAddSubject={() => { setEditingSubject(null); setSubjectModalOpen(true); }} onEditSubject={(s) => { setEditingSubject(s); setSubjectModalOpen(true); }} onDeleteSubject={handleDeleteSubject} theme={theme} toggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} searchQuery={searchQuery} onSearchChange={(e) => setSearchQuery(e.target.value)} searchResults={searchResults} onSelectSummary={handleSelectSummary} lastViewed={lastViewedWithDetails} completedSummaries={completedSummaries} onNavigateToAdmin={() => setView('admin')} />
+            </>
+        );
       case 'subject':
-        return <SummaryListView subject={currentSubject} summaries={summariesForCurrentSubject} onSelectSummary={handleSelectSummary} onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }} onEditSummary={(summary) => { setEditingSummary(summary); setSummaryModalOpen(true); }} onDeleteSummary={handleDeleteSummary} user={user} userProgress={userProgress} onAISplit={() => setAISplitterModalOpen(true)} onReorderSummaries={handleReorderSummaries} onGenerateFlashcardsForAll={handleGenerateFlashcardsForAll} onGenerateQuizForAll={handleGenerateQuizForAll} isBatchLoading={isBatchLoading} batchLoadingMessage={batchLoadingMessage}/>;
-
+        return <SummaryListView subject={currentSubject} summaries={summariesForCurrentSubject} onSelectSummary={handleSelectSummary} onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }} onEditSummary={(s) => { setEditingSummary(s); setSummaryModalOpen(true); }} onDeleteSummary={handleDeleteSummary} user={user} completedSummaries={completedSummaries} onAISplit={() => setAISplitterModalOpen(true)} onReorderSummaries={handleReorderSummaries} onGenerateFlashcardsForAll={() => generateForAll('flashcards')} onGenerateQuizForAll={() => generateForAll('questions')} isBatchLoading={isBatchLoading} batchLoadingMessage={batchLoadingMessage}/>;
       case 'summary':
-        return <SummaryDetailView
-                  summary={currentSummary}
-                  subject={currentSubject}
-                  onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }}
-                  onDelete={() => handleDeleteSummary(currentSummary.id)}
-                  onGenerateQuiz={handleGenerateQuiz}
-                  onToggleComplete={handleToggleComplete}
-                  isCompleted={userProgress.completedSummaries.includes(currentSummary.id)}
-                  onGetExplanation={handleGetExplanation}
-                  user={user}
-                  onAIUpdate={() => setAIUpdateModalOpen(true)}
-                  onGenerateFlashcards={handleGenerateFlashcards}
-                />;
-
+        return <SummaryDetailView summary={currentSummary} subject={currentSubject} onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }} onDelete={() => handleDeleteSummary(currentSummary.id)} onGenerateQuiz={handleGenerateQuiz} onToggleComplete={handleToggleComplete} isCompleted={completedSummaries.includes(currentSummary.id)} onGetExplanation={handleGetExplanation} user={user} onAIUpdate={() => setAIUpdateModalOpen(true)} onGenerateFlashcards={handleGenerateFlashcards} />;
+      case 'admin':
+        return <AdminPanel onBack={handleBackToDashboard} />;
       default:
-        return <LoginScreen theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />;
+        return <div>Carregando...</div>;
     }
   };
 
   const breadcrumbPaths = useMemo(() => {
       const paths = [{ name: 'Início', onClick: handleBackToDashboard }];
-      if (view === 'subject' && currentSubject) {
-          paths.push({ name: currentSubject.name, onClick: () => {} });
-      } else if (view === 'summary' && currentSubject && currentSummary) {
+      if (view === 'subject' && currentSubject) paths.push({ name: currentSubject.name, onClick: () => {} });
+      else if (view === 'summary' && currentSubject && currentSummary) {
           paths.push({ name: currentSubject.name, onClick: handleBackToSubject });
           paths.push({ name: currentSummary.title, onClick: () => {} });
       }
       return paths;
   }, [view, currentSubject, currentSummary]);
 
+  const showHeader = user && user.status === 'active' && view !== 'dashboard' && view !== 'admin';
+
   return (
     <>
-      {user && user.term_id && !needsSubscription && view !== 'dashboard' && (
+      {showHeader && (
           <div className="main-header">
               <Breadcrumbs paths={breadcrumbPaths} />
-              <ThemeToggle theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
+              <ThemeToggle theme={theme} toggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} />
           </div>
       )}
       {renderContent()}
 
-      <SubjectModal
-        isOpen={isSubjectModalOpen}
-        onClose={() => setSubjectModalOpen(false)}
-        onSave={handleSaveSubject}
-        subject={editingSubject}
-        existingSubjects={subjects}
-        user={user}
-        terms={terms}
-      />
-      <SummaryModal
-        isOpen={isSummaryModalOpen}
-        onClose={() => setSummaryModalOpen(false)}
-        onSave={handleSaveSummary}
-        summary={editingSummary}
-        subjectId={currentSubjectId}
-      />
-       <AISplitterModal
-        isOpen={isAISplitterModalOpen}
-        onClose={() => setAISplitterModalOpen(false)}
-        onSummariesCreated={handleSplitAndSaveSummaries}
-      />
-      {isAIUpdateModalOpen && currentSummary && <AIUpdateModal
-        summary={currentSummary}
-        onClose={() => setAIUpdateModalOpen(false)}
-        onUpdate={(newContent) => handleUpdateSummaryContent(currentSummary.id, newContent)}
-      />}
+      <SubjectModal isOpen={isSubjectModalOpen} onClose={() => setSubjectModalOpen(false)} onSave={handleSaveSubject} subject={editingSubject} existingSubjects={subjects} user={user} terms={terms} />
+      <SummaryModal isOpen={isSummaryModalOpen} onClose={() => setSummaryModalOpen(false)} onSave={handleSaveSummary} summary={editingSummary} subjectId={currentSubjectId} />
+      <AISplitterModal isOpen={isAISplitterModalOpen} onClose={() => setAISplitterModalOpen(false)} onSummariesCreated={handleSplitAndSaveSummaries} />
+      {isAIUpdateModalOpen && currentSummary && <AIUpdateModal summary={currentSummary} onClose={() => setAIUpdateModalOpen(false)} onUpdate={(newContent) => handleUpdateSummaryContent(currentSummary.id, newContent)} />}
     </>
   );
 };
