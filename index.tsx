@@ -817,7 +817,7 @@ const ReportsDashboard = () => {
                 <div className="stat-card"><h4>Faturamento Bruto Mensal</h4><p>{formatCurrency(reportData.total_revenue_monthly)}</p></div>
                 <div className="stat-card"><h4>Lucro Líquido Mensal</h4><p>{formatCurrency(reportData.net_profit_monthly)}</p></div>
                 <div className="stat-card"><h4>Total de Alunos Ativos</h4><p>{reportData.total_students}</p></div>
-                <div className="stat-card"><h4>Custo por Aluno</h4><p>{formatCurrency(reportData.monthly_price_per_student)}</p></div>
+                <div className="stat-card"><h4>Valor por Aluno</h4><p>{formatCurrency(reportData.monthly_price_per_student)}</p></div>
             </div>
 
             <div className="admin-section">
