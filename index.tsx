@@ -774,16 +774,13 @@ ${textContent}
     );
 };
 
-// [NOVO] Componente para o painel de relatórios
 const ReportsDashboard = () => {
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [studentsPerTerm, setStudentsPerTerm] = useState([]);
-    const [costs, setCosts] = useState(0); // Custo operacional editável
+    const [costs, setCosts] = useState(0);
 
-    const formatCurrency = (value) => {
-        return (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    }
+    const formatCurrency = (value) => (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     const fetchData = async (currentCosts) => {
         setLoading(true);
@@ -808,22 +805,11 @@ const ReportsDashboard = () => {
         fetchData(costs);
     }, []);
 
-    const handleCostsChange = (e) => {
-        const value = e.target.value;
-        setCosts(value === '' ? 0 : parseFloat(value));
-    };
+    const handleCostsChange = (e) => setCosts(e.target.value === '' ? 0 : parseFloat(e.target.value));
+    const handleUpdateCosts = () => fetchData(costs);
 
-    const handleUpdateCosts = () => {
-        fetchData(costs);
-    };
-
-    if (loading) {
-        return <div className="loader-container"><div className="loader"></div></div>;
-    }
-
-    if (!reportData) {
-        return <div>Não foi possível carregar os dados.</div>
-    }
+    if (loading) return <div className="loader-container"><div className="loader"></div></div>;
+    if (!reportData) return <div>Não foi possível carregar os dados.</div>;
 
     return (
         <div className="admin-reports">
@@ -883,9 +869,8 @@ const ReportsDashboard = () => {
 };
 
 
-// [ALTERADO] PAINEL ADMINISTRATIVO COM ABAS
 const AdminPanel = ({ onBack }) => {
-    const [activeTab, setActiveTab] = useState('reports'); // 'reports' ou 'users'
+    const [activeTab, setActiveTab] = useState('reports');
 
     const UserManagementPanel = () => {
         const [users, setUsers] = useState([]);
@@ -981,7 +966,6 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
       <div className="dashboard-header">
         <h1>{isSearching ? "Resultados da Busca" : "Início"}</h1>
         <div className="header-actions">
-            {/* [ALTERADO] Apenas admins podem ver o painel */}
             {user.role === 'admin' && <button className="btn btn-primary" onClick={onNavigateToAdmin}>Painel Admin</button>}
             <ThemeToggle theme={theme} toggleTheme={toggleTheme}/>
             <button className="btn btn-secondary" onClick={onLogout}>Sair</button>
@@ -1030,7 +1014,6 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
             </div>
           )}
 
-          {/* [ALTERADO] Admins e Embaixadores podem adicionar disciplinas */}
           <div className="add-subject-button-container">
               {isAdminOrAmbassador && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
           </div>
@@ -1802,7 +1785,7 @@ const App = () => {
   const [completedSummaries, setCompletedSummaries] = useState([]);
   const [lastViewed, setLastViewed] = useState([]);
 
-  // States de Modais e Loading
+  // States de Modais, Loading e Filtros
   const [isSubjectModalOpen, setSubjectModalOpen] = useState(false);
   const [isSummaryModalOpen, setSummaryModalOpen] = useState(false);
   const [isAISplitterModalOpen, setAISplitterModalOpen] = useState(false);
@@ -1835,12 +1818,9 @@ const App = () => {
 
             if (fullUser.status === 'active') {
                 await fetchUserProgress(currentSession.user.id);
-                // [ALTERADO] Lógica de carregamento de dados baseada no papel
                 if (fullUser.role === 'admin') {
-                    // Admin carrega tudo, não precisa de term_id
-                    await fetchAppData(null, fullUser.role);
+                    await fetchAppData(null, 'admin');
                 } else if (fullUser.term_id) {
-                    // Embaixador ou estudante carrega dados do seu próprio período
                     await fetchAppData(fullUser.term_id, fullUser.role);
                 }
             }
@@ -1876,14 +1856,18 @@ const App = () => {
 
   const fetchAppData = async (termId, userRole) => {
     let subjectsQuery = supabase.from('subjects').select('*');
-    // [ALTERADO] Admin vê disciplinas de todos os períodos
+
     if (userRole !== 'admin') {
-        subjectsQuery = subjectsQuery.eq('term_id', termId);
+      subjectsQuery = subjectsQuery.eq('term_id', termId);
     }
-    const { data: subjectsData } = await subjectsQuery;
+
+    const { data: subjectsData, error: subjectsError } = await subjectsQuery;
+    if (subjectsError) console.error("Erro ao buscar disciplinas:", subjectsError);
     setSubjects(subjectsData || []);
 
-    const { data: summariesData } = await supabase.from('summaries').select('*').order('position', { ascending: true });
+    const { data: summariesData, error: summariesError } = await supabase.from('summaries').select('*').order('position', { ascending: true });
+    if (summariesError) console.error("Erro ao buscar resumos:", summariesError);
+
     const parseJsonField = (field, fallback = []) => {
         if (typeof field === 'string') { try { const parsed = JSON.parse(field); return Array.isArray(parsed) ? parsed : fallback; } catch (e) { return fallback; } }
         return Array.isArray(field) ? field : fallback;
@@ -2090,10 +2074,14 @@ const App = () => {
   const currentSummary = summaries.find(s => s.id === currentSummaryId);
   const summariesForCurrentSubject = useMemo(() => summaries.filter(s => s.subject_id === currentSubjectId).sort((a, b) => (a.position ?? 0) - (b.position ?? 0)), [summaries, currentSubjectId]);
 
-  // [ALTERADO] Filtro de disciplinas visíveis para admin
   const subjectsForUser = useMemo(() => {
-    if (user?.role === 'admin' && selectedTermForAdmin) {
-        return subjects.filter(s => s.term_id === selectedTermForAdmin);
+    if (user?.role === 'admin') {
+      if (selectedTermForAdmin) {
+        // [CORREÇÃO APLICADA AQUI]
+        // Garante que a comparação seja robusta, tratando ambos os valores como strings.
+        return subjects.filter(s => String(s.term_id) === String(selectedTermForAdmin));
+      }
+      return subjects;
     }
     return subjects;
   }, [subjects, user, selectedTermForAdmin]);
@@ -2118,7 +2106,7 @@ const App = () => {
                 id="term-selector"
                 className="select-input"
                 value={selectedTermForAdmin || ''}
-                onChange={(e) => setSelectedTermForAdmin(Number(e.target.value) || null)}
+                onChange={(e) => setSelectedTermForAdmin(e.target.value ? Number(e.target.value) : null)}
             >
                 <option value="">Todos os Períodos</option>
                 {terms.map(term => <option key={term.id} value={term.id}>{term.name}</option>)}
