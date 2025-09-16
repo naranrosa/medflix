@@ -817,7 +817,7 @@ const ReportsDashboard = () => {
                 <div className="stat-card"><h4>Faturamento Bruto Mensal</h4><p>{formatCurrency(reportData.total_revenue_monthly)}</p></div>
                 <div className="stat-card"><h4>Lucro Líquido Mensal</h4><p>{formatCurrency(reportData.net_profit_monthly)}</p></div>
                 <div className="stat-card"><h4>Total de Alunos Ativos</h4><p>{reportData.total_students}</p></div>
-                <div className="stat-card"><h4>Valor por Aluno</h4><p>{formatCurrency(reportData.monthly_price_per_student)}</p></div>
+                <div className="stat-card"><h4>Custo por Aluno</h4><p>{formatCurrency(reportData.monthly_price_per_student)}</p></div>
             </div>
 
             <div className="admin-section">
@@ -957,7 +957,8 @@ const AdminPanel = ({ onBack }) => {
 };
 
 
-const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, completedSummaries, onNavigateToAdmin }) => {
+// ALTERADO: Adicionado novas props para os botões e estados de loading
+const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, completedSummaries, onNavigateToAdmin, onGenerateFlashcardsForAll, onGenerateQuizForAll, isBatchLoading, batchLoadingMessage }) => {
   const isSearching = searchQuery.trim() !== '';
   const isAdminOrAmbassador = user.role === 'admin' || user.role === 'embaixador';
 
@@ -1014,9 +1015,29 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
             </div>
           )}
 
-          <div className="add-subject-button-container">
-              {isAdminOrAmbassador && <button className="btn btn-primary" onClick={onAddSubject}>Adicionar Disciplina</button>}
-          </div>
+          {/* NOVO: Container para os botões de ação em lote */}
+          {isAdminOrAmbassador && (
+            <div className="dashboard-global-actions">
+              {isBatchLoading ? (
+                <div className="batch-loader">
+                  <div className="loader-sm"></div>
+                  <p>{batchLoadingMessage}</p>
+                </div>
+              ) : (
+                <>
+                  <button className="btn btn-secondary" onClick={onGenerateFlashcardsForAll} disabled={isBatchLoading}>
+                    Gerar Flashcards para Faltantes
+                  </button>
+                  <button className="btn btn-secondary" onClick={onGenerateQuizForAll} disabled={isBatchLoading}>
+                    Gerar Questões para Faltantes
+                  </button>
+                  <button className="btn btn-primary" onClick={onAddSubject}>
+                    Adicionar Disciplina
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="subject-grid">
             {subjects.map(subject => {
@@ -2048,6 +2069,65 @@ const App = () => {
         finally { setIsBatchLoading(false); setBatchLoadingMessage(''); }
     };
 
+    // NOVO: Lógica centralizada para gerar conteúdo para todos os resumos faltantes
+    const handleGenerateContentForAllMissing = async (contentType) => {
+        const visibleSubjectIds = new Set(subjectsForUser.map(s => s.id));
+        const summariesToProcess = summaries.filter(s =>
+            visibleSubjectIds.has(s.subject_id) &&
+            (!s[contentType] || s[contentType].length === 0)
+        );
+
+        if (summariesToProcess.length === 0) {
+            const contentName = contentType === 'flashcards' ? 'flashcards' : 'questões';
+            alert(`Não há resumos sem ${contentName} para gerar.`);
+            return;
+        }
+
+        const confirm = window.confirm(`Isso irá gerar ${contentType} para ${summariesToProcess.length} resumo(s). Deseja continuar?`);
+        if (!confirm) return;
+
+        setIsBatchLoading(true);
+
+        try {
+            for (const [index, summary] of summariesToProcess.entries()) {
+                const isFlashcards = contentType === 'flashcards';
+                const contentName = isFlashcards ? 'Flashcards' : 'Questões';
+                setBatchLoadingMessage(`Gerando ${contentName} para "${summary.title}" (${index + 1}/${summariesToProcess.length})...`);
+
+                const prompt = isFlashcards
+                    ? `Baseado no resumo sobre "${summary.title}", crie flashcards para estudo. Formato pergunta-e-resposta (frente e verso). Priorize conceitos-chave, definições, mecanismos, causas, consequências, classificações e relações clínicas. EVITE valores numéricos específicos. Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`
+                    : `Você é um especialista em criar questões para provas de residência médica. Baseado estritamente no conteúdo do resumo a seguir, crie uma lista de no mínimo 10 questões de múltipla escolha de alto nível. As questões devem ser complexas, mesclando diferentes formatos (ex: caso clínico curto, "qual das seguintes NÃO é", etc.). Cada questão deve ter 4 alternativas plausíveis, mas apenas uma correta. Forneça também um comentário explicativo para a resposta correta, justificando-a com base no texto do resumo. Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`;
+
+                const schema = isFlashcards ? flashcardsSchema : quizSchema;
+                const parsedJson = await generateAIContentWithRetry(prompt, schema);
+
+                const contentPayload = parsedJson[isFlashcards ? 'flashcards' : 'questions'];
+                const { error } = await supabase.from('summaries').update({ [contentType]: contentPayload }).eq('id', summary.id);
+
+                if (error) {
+                    throw new Error(`Falha ao salvar no resumo "${summary.title}": ${error.message}`);
+                }
+
+                // Atualiza o estado local para a UI refletir a mudança imediatamente
+                setSummaries(prev =>
+                    prev.map(s => s.id === summary.id ? { ...s, [contentType]: contentPayload } : s)
+                );
+            }
+            alert(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} gerados com sucesso para ${summariesToProcess.length} resumo(s)!`);
+        } catch (e) {
+            console.error(`Erro na geração em lote de ${contentType}:`, e);
+            alert(`Ocorreu um erro durante a geração em lote: ${e.message}`);
+        } finally {
+            setIsBatchLoading(false);
+            setBatchLoadingMessage('');
+        }
+    };
+
+    // NOVO: Funções específicas que serão passadas para o Dashboard
+    const handleGenerateFlashcardsForAllSubjects = () => handleGenerateContentForAllMissing('flashcards');
+    const handleGenerateQuizForAllSubjects = () => handleGenerateContentForAllMissing('questions');
+
+
    const handleGetExplanation = async (questionText, correctAnswer) => {
         const summary = summaries.find(s => s.id === currentSummaryId);
         if (!summary) return "Contexto não encontrado.";
@@ -2077,8 +2157,6 @@ const App = () => {
   const subjectsForUser = useMemo(() => {
     if (user?.role === 'admin') {
       if (selectedTermForAdmin) {
-        // [CORREÇÃO APLICADA AQUI]
-        // Garante que a comparação seja robusta, tratando ambos os valores como strings.
         return subjects.filter(s => String(s.term_id) === String(selectedTermForAdmin));
       }
       return subjects;
@@ -2135,7 +2213,30 @@ const App = () => {
         return (
             <>
                 {user.role === 'admin' && <AdminTermSelector />}
-                <Dashboard user={user} termName={terms.find(t => t.id === user.term_id)?.name} onLogout={handleLogout} subjects={subjectsForUser} onSelectSubject={handleSelectSubject} onAddSubject={() => { setEditingSubject(null); setSubjectModalOpen(true); }} onEditSubject={(s) => { setEditingSubject(s); setSubjectModalOpen(true); }} onDeleteSubject={handleDeleteSubject} theme={theme} toggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} searchQuery={searchQuery} onSearchChange={(e) => setSearchQuery(e.target.value)} searchResults={searchResults} onSelectSummary={handleSelectSummary} lastViewed={lastViewedWithDetails} completedSummaries={completedSummaries} onNavigateToAdmin={() => setView('admin')} />
+                {/* ALTERADO: Passando as novas props para o Dashboard */}
+                <Dashboard
+                    user={user}
+                    termName={terms.find(t => t.id === user.term_id)?.name}
+                    onLogout={handleLogout}
+                    subjects={subjectsForUser}
+                    onSelectSubject={handleSelectSubject}
+                    onAddSubject={() => { setEditingSubject(null); setSubjectModalOpen(true); }}
+                    onEditSubject={(s) => { setEditingSubject(s); setSubjectModalOpen(true); }}
+                    onDeleteSubject={handleDeleteSubject}
+                    theme={theme}
+                    toggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+                    searchQuery={searchQuery}
+                    onSearchChange={(e) => setSearchQuery(e.target.value)}
+                    searchResults={searchResults}
+                    onSelectSummary={handleSelectSummary}
+                    lastViewed={lastViewedWithDetails}
+                    completedSummaries={completedSummaries}
+                    onNavigateToAdmin={() => setView('admin')}
+                    onGenerateFlashcardsForAll={handleGenerateFlashcardsForAllSubjects}
+                    onGenerateQuizForAll={handleGenerateQuizForAllSubjects}
+                    isBatchLoading={isBatchLoading}
+                    batchLoadingMessage={batchLoadingMessage}
+                />
             </>
         );
       case 'subject':
