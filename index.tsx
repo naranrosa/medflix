@@ -255,9 +255,17 @@ const QuizQuestion = ({ question }) => {
 };
 
 // --- FUNÇÕES AUXILIARES ---
+// --- FUNÇÕES AUXILIARES ---
 const subjectColors = [
-  '#A8DADC', '#F4A261', '#E9C46A', '#F6BD60', '#D4A5A5',
-  '#B5CDA3', '#CDB4DB', '#FFDAC1', '#BDE0FE'
+  '#E63946', // Vermelho
+  '#1D3557', // Azul Escuro
+  '#457B9D', // Azul Médio
+  '#2A9D8F', // Verde-azulado
+  '#E76F51', // Laranja
+  '#FFC300', // Amarelo
+  '#6A057F', // Roxo
+  '#E5989B', // Rosa
+  '#008080'  // Verde-petróleo
 ];
 const getNewSubjectColor = (existingSubjects) => {
     const usedColors = new Set(existingSubjects.map(s => s.color));
@@ -1069,12 +1077,16 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
 const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user, terms }) => {
     const [name, setName] = useState('');
     const [selectedTermId, setSelectedTermId] = useState('');
+    // NOVO: Adiciona um estado para a cor selecionada
+    const [color, setColor] = useState('');
     const isAdminOrAmbassador = user?.role === 'admin' || user?.role === 'embaixador';
 
     useEffect(() => {
         if (isOpen) {
             setName(subject?.name || '');
             setSelectedTermId(subject?.term_id || (isAdminOrAmbassador ? '' : user?.term_id));
+            // NOVO: Define a cor atual do subject ou a primeira cor da lista se for um novo
+            setColor(subject?.color || subjectColors[0]);
         }
     }, [isOpen, subject, user, isAdminOrAmbassador]);
 
@@ -1088,10 +1100,10 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
             return;
         }
 
-        const finalColor = subject?.color || getNewSubjectColor(existingSubjects);
+        // MODIFICADO: A cor agora vem do estado, não é mais gerada aleatoriamente
         const termIdToSave = isAdminOrAmbassador ? selectedTermId : user?.term_id;
 
-        onSave({ ...subject, name, color: finalColor, term_id: termIdToSave });
+        onSave({ ...subject, name, color, term_id: termIdToSave });
     };
 
     return (
@@ -1121,6 +1133,22 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
                             </select>
                         </div>
                     )}
+
+                    {/* NOVO: Seletor de Cores */}
+                    <div className="form-group">
+                        <label>Cor da Disciplina</label>
+                        <div className="color-selector">
+                            {subjectColors.map((c, index) => (
+                                <div
+                                    key={index}
+                                    className={`color-swatch ${color === c ? 'selected' : ''}`}
+                                    style={{ backgroundColor: c }}
+                                    onClick={() => setColor(c)}
+                                />
+                            ))}
+                        </div>
+                    </div>
+
 
                     <div className="modal-actions">
                         <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
