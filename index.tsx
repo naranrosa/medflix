@@ -1,2312 +1,2840 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { createRoot } from 'react-dom/client';
-import { GoogleGenAI, Type } from "@google/genai";
-import { createClient, Session, User } from '@supabase/supabase-js';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+/* No topo do seu arquivo index.css */
+@import 'reactflow/dist/style.css';
 
-// --- CONFIGURAÇÃO DO SUPABASE ---
-const supabaseUrl = 'https://vylpdfeqdylcqxzllnbh.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5bHBkZmVxZHlsY3F4emxsbmJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxNjY3NzMsImV4cCI6MjA3Mjc0Mjc3M30.muT9yFZaHottkDM-acc6iU5XHqbo7yqTF-bpPoAotMY';
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// --- DADOS MOCADOS (APENAS PARA PREENCHER A INTERFACE INICIALMENTE) ---
-const initialTerms = Array.from({ length: 12 }, (_, i) => ({
-    id: `t${i + 1}`,
-    name: `${i + 1}º Termo`,
-}));
-
-// --- CONFIGURAÇÃO DA IA E FUNÇÃO DE RETRY ---
-const API_KEY = process.env.API_KEY;
-if (!API_KEY) {
-  throw new Error("API_KEY environment variable not set");
+:root {
+  --background-color: #121212;
+  --card-color: #1E1E1E;
+  --text-color: #EAEAEA;
+  --primary-text-color: #FFFFFF;
+  --border-color: #333333;
+  --primary-accent: #007BFF;
+  --primary-accent-hover: #0056b3;
+  --danger-accent: #dc3545;
+  --danger-accent-hover: #c82333;
+  --success-accent: #28a745;
+  --font-family: 'Poppins', sans-serif;
+  --icon-button-bg: rgba(255, 255, 255, 0.1);
+  --icon-button-bg-hover: rgba(255, 255, 255, 0.2);
 }
-const ai = new GoogleGenAI({ apiKey: API_KEY });
-const model = "gemini-2.5-flash";
 
-/**
- * Encapsula a chamada da API GenAI com uma lógica de retry para erros 503 (servidor sobrecarregado).
- * @param {string} prompt O prompt a ser enviado para o modelo.
- * @param {object} schema O schema de resposta esperado.
- * @param {number} maxRetries O número máximo de tentativas.
- * @returns {Promise<object>} O JSON parseado da resposta da IA.
- */
-const generateAIContentWithRetry = async (prompt, schema, maxRetries = 4) => {
-    let attempt = 0;
-    let delay = 1000;
+body.light-mode {
+  --background-color: #f4f7f9;
+  --card-color: #ffffff;
+  --text-color: #4a4a4a;
+  --primary-text-color: #121212;
+  --border-color: #e1e1e1;
+  --icon-button-bg: rgba(0, 0, 0, 0.05);
+  --icon-button-bg-hover: rgba(0, 0, 0, 0.1);
+}
 
-    while (attempt < maxRetries) {
-        try {
-            const response = await ai.models.generateContent({
-                model,
-                contents: prompt,
-                config: { responseMimeType: "application/json", responseSchema: schema },
-            });
 
-            let rawText = response.text.trim();
-            const jsonMatch = rawText.match(/```json\s*([\s\S]*?)\s*```/);
-            if (jsonMatch && jsonMatch[1]) {
-                rawText = jsonMatch[1];
-            }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
-            const firstBracket = rawText.indexOf('{');
-            const lastBracket = rawText.lastIndexOf('}');
-            if (firstBracket !== -1 && lastBracket > firstBracket) {
-                rawText = rawText.substring(firstBracket, lastBracket + 1);
-            }
+html, body {
+  height: 100%;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  font-family: var(--font-family);
+  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
 
-            try {
-                return JSON.parse(rawText);
-            } catch (parseError) {
-                console.error("ERRO DE PARSE JSON:", parseError);
-                console.error("--- TEXTO BRUTO DA IA QUE FALHOU --- \n", rawText, "\n--- FIM DO TEXTO BRUTO ---");
-                throw new Error("JSON_PARSE_FAILED");
-            }
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 0;
+}
 
-        } catch (error) {
-            attempt++;
-            const isOverloaded = error.message && (error.message.includes('503') || error.message.toLowerCase().includes('overloaded'));
-            const isParseFailure = error.message === "JSON_PARSE_FAILED";
+.container {
+  width: 100%;
+  max-width: 1200px;
+  padding: 2rem;
+  margin: 0 auto;
+}
 
-            if ((isOverloaded || isParseFailure) && attempt < maxRetries) {
-                const reason = isOverloaded ? "Modelo sobrecarregado" : "Resposta JSON inválida";
-                console.warn(`${reason}. Tentando novamente em ${delay / 1000}s... (Tentativa ${attempt}/${maxRetries})`);
-                await new Promise(res => setTimeout(res, delay));
-                delay *= 2;
-            } else {
-                if (isParseFailure) {
-                    console.error("Máximo de tentativas atingido. A IA continua retornando JSON inválido.");
-                    throw new Error("A resposta da IA não pôde ser processada. Por favor, tente novamente.");
-                }
-                console.error("Erro final da API ou máximo de tentativas atingido para servidor sobrecarregado.");
-                throw error;
-            }
-        }
+/* Login Screen */
+.login-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 100vh; /* Use min-height para garantir que cubra a tela inteira */
+  padding: 1rem;
+  /* Gradiente para o modo escuro */
+  background: var(--background-color); /* Cor base */
+  background-image: radial-gradient(circle at center, #2a2a3a 0%, var(--background-color) 70%);
+  position: relative;
+  overflow: hidden;
+  transition: background-image 0.3s ease;
+}
+
+.login-screen .theme-switch {
+    position: absolute;
+    top: 2rem;
+    right: 2rem;
+    z-index: 2;
+}
+
+.login-card {
+  /* Efeito de vidro fosco para o modo escuro */
+  background: rgba(30, 30, 30, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  padding: 3rem;
+  border-radius: 16px;
+
+  /* Borda sutil */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.35);
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+
+  animation: fadeInSlideUp 0.6s ease-out forwards;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.login-card h1 {
+  font-size: 3.2rem;
+  font-weight: 700;
+  color: var(--primary-text-color);
+  margin-bottom: 0.5rem;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.login-card h1 span {
+ color: var(--primary-accent);
+}
+
+.login-card p {
+    margin-bottom: 2rem;
+    font-size: 1.1rem;
+    color: var(--text-color);
+    opacity: 0.9;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.input, .select-input {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  background-color: rgba(0, 0, 0, 0.2); /* Fundo mais escuro e translúcido */
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--primary-text-color);
+  font-size: 1rem;
+  font-family: var(--font-family);
+  transition: all 0.3s ease; /* Transição para o efeito de foco */
+}
+
+.input:focus, .select-input:focus {
+    outline: none;
+    border-color: var(--primary-accent);
+    /* Efeito de brilho ao focar */
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+}
+
+
+.select-input {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23AAAAAA' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 1em;
+}
+
+/* Base Button Style */
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.btn-primary {
+  background-color: var(--primary-accent);
+  color: var(--primary-text-color);
+}
+.btn-primary:not(:disabled):hover {
+  background-color: var(--primary-accent-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 123, 255, 0.2);
+}
+
+.btn-secondary {
+    background-color: var(--card-color);
+    color: var(--primary-text-color);
+    border: 1px solid var(--border-color);
+}
+.btn-secondary:hover {
+    background-color: var(--background-color);
+}
+
+.btn-danger {
+  background-color: var(--danger-accent);
+  color: #fff;
+}
+.btn-danger:hover {
+  background-color: var(--danger-accent-hover);
+}
+
+.btn.btn-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+/* Main Header & Breadcrumbs */
+.main-header {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1.5rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.breadcrumb-item {
+    background: none;
+    border: none;
+    color: var(--text-color);
+    font-family: var(--font-family);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.breadcrumb-item:hover:not(:disabled) {
+    color: var(--primary-accent);
+}
+.breadcrumb-item.active {
+    color: var(--primary-text-color);
+    font-weight: 500;
+    cursor: default;
+}
+
+.breadcrumb-separator {
+    color: var(--text-color);
+    opacity: 0.5;
+}
+
+/* Dashboard */
+.dashboard {
+  width: 100%;
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+.dashboard-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.dashboard-header h1 {
+  font-size: 2.5rem;
+  color: var(--primary-text-color);
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.dashboard-main-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.subject-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.subject-card {
+  border-radius: 12px;
+  padding: 1.5rem;
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: white;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  position: relative;
+}
+
+.subject-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+}
+
+.subject-card h3 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  padding-right: 60px; /* space for icons */
+}
+
+.subject-card-progress {
+    margin-top: 1rem;
+}
+.subject-card-progress p {
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+.progress-bar {
+    height: 6px;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    margin-top: 0.5rem;
+    overflow: hidden;
+}
+.progress-bar-inner {
+    height: 100%;
+    background-color: #fff;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+
+.card-actions {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.icon-btn {
+    background-color: var(--icon-button-bg);
+    color: var(--primary-text-color);
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.icon-btn:hover {
+    background-color: var(--icon-button-bg-hover);
+}
+.icon-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+
+/* Summary List View */
+.summary-list-view {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+.summary-list {
+    list-style: none;
+}
+
+.summary-list-item {
+    background-color: var(--card-color);
+    padding: 1.25rem 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    transition: background-color 0.2s ease;
+    border: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.summary-list-item-title {
+    flex-grow: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.summary-list-item-title:hover {
+    color: var(--primary-accent);
+}
+
+.completion-check svg {
+    color: var(--success-accent);
+    width: 20px;
+    height: 20px;
+}
+
+.summary-list-item-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background-color: var(--card-color);
+    border: 1px dashed var(--border-color);
+    border-radius: 12px;
+}
+.empty-state h2 {
+    color: var(--primary-text-color);
+    margin-bottom: 0.5rem;
+}
+.empty-state p {
+    margin-bottom: 1.5rem;
+}
+.empty-state-actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+}
+
+
+/* Summary Detail View */
+.summary-detail-layout {
+    width: 100%;
+    max-width: 1200px;
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+    padding: 0 2rem;
+}
+
+.summary-detail-view {
+  animation: fadeIn 0.5s ease-in-out;
+  flex-grow: 1;
+  min-width: 0; /* Important for flexbox to prevent overflow */
+}
+
+.summary-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.summary-detail-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.summary-detail-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--primary-text-color);
+    line-height: 1.3;
+    flex-grow: 1;
+}
+
+/* Tabs */
+.tabs-nav {
+    display: flex;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 2rem;
+}
+
+.tab-button {
+    background: none;
+    border: none;
+    color: var(--text-color);
+    padding: 1rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px; /* Aligns with the container's border */
+}
+
+.tab-button:hover {
+    background-color: var(--icon-button-bg);
+}
+
+.tab-button.active {
+    color: var(--primary-accent);
+    border-bottom-color: var(--primary-accent);
+}
+
+.tab-content {
+    animation: fadeIn 0.4s;
+    background-color: var(--card-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 2rem;
+}
+
+/* On summary tab, content has no extra padding */
+#tab-panel-summary {
+    padding: 0;
+    background: none;
+    border: none;
+}
+
+
+.youtube-player-container {
+    position: relative;
+    width: 100%;
+    padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+    height: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    background-color: #000;
+}
+
+.youtube-player-container iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.spotify-player-container {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.spotify-player-container iframe {
+    width: 100%;
+    height: 152px; /* Height for the compact player */
+    border: none;
+}
+
+.summary-content {
+    max-width: 100%;
+}
+
+.summary-content h1 {
+   display: none;
+}
+.summary-content h2 {
+    font-size: 1.8rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border-color);
+}
+.summary-content h3 {
+    font-size: 1.4rem;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+.summary-content p {
+    line-height: 1.8;
+    margin-bottom: 1rem;
+}
+.summary-content strong {
+    font-weight: 600;
+}
+.summary-content ul, .summary-content ol {
+    list-style-position: inside;
+    padding-left: 1rem;
+    margin-bottom: 1rem;
+}
+.summary-content li {
+    margin-bottom: 0.5rem;
+    line-height: 1.7;
+}
+.summary-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-size: 0.95rem;
+}
+.summary-content th, .summary-content td {
+    border: 1px solid var(--border-color);
+    padding: 0.75rem;
+    text-align: left;
+}
+.summary-content th {
+    background-color: var(--background-color);
+    font-weight: 600;
+}
+.summary-content tr:nth-child(even) {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+/* Table of Contents */
+.toc-container {
+    position: sticky;
+    top: 2rem;
+    width: 250px;
+    flex-shrink: 0;
+    padding: 1.5rem;
+    background-color: var(--card-color);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+.toc-container h4 {
+    margin-bottom: 1rem;
+    color: var(--primary-text-color);
+}
+.toc-container ul {
+    list-style: none;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+.toc-container li a {
+    text-decoration: none;
+    color: var(--text-color);
+    display: block;
+    padding: 0.4rem 0;
+    transition: color 0.2s;
+    font-size: 0.9rem;
+}
+.toc-container li a:hover {
+    color: var(--primary-accent);
+}
+.toc-container .toc-level-2 {
+    padding-left: 1rem;
+}
+
+/* Quiz View */
+.quiz-container {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+.empty-quiz {
+    text-align: center;
+}
+.empty-quiz p {
+    margin-bottom: 1rem;
+}
+
+.quiz-container h2 {
+    font-size: 1.8rem;
+    margin-bottom: 2rem;
+    color: var(--primary-text-color);
+}
+
+.question-block {
+    margin-bottom: 2.5rem;
+}
+
+.question-text {
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin-bottom: 1rem;
+    line-height: 1.6;
+}
+
+.alternatives-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.alternative-item {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-family: var(--font-family);
+    font-size: 1rem;
+    text-align: left;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.alternative-item:not(:disabled):hover {
+    border-color: var(--primary-accent);
+    color: var(--primary-accent);
+}
+
+.alternative-item:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+
+.alternative-item.correct {
+    background-color: var(--success-accent);
+    border-color: var(--success-accent);
+    color: #fff;
+    opacity: 1;
+}
+
+.alternative-item.incorrect {
+    background-color: var(--danger-accent);
+    border-color: var(--danger-accent);
+    color: #fff;
+    opacity: 1;
+}
+
+.explanation-box {
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--primary-accent);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+.loader-sm {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--primary-accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* File Upload in Modal */
+.file-upload-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: var(--background-color);
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    gap: 1rem;
+}
+
+.file-name {
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Make file input look consistent */
+.input[type="file"] {
+    padding: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.input[type="file"]::-webkit-file-upload-button {
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font-family);
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    transition: background-color 0.2s;
+    margin-right: 1rem;
+    border: 1px solid var(--border-color);
+    background: var(--card-color);
+    color: var(--text-color);
+}
+.input[type="file"]::-webkit-file-upload-button:hover {
+    background-color: var(--background-color);
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s;
+}
+
+.modal-content {
+  background: var(--card-color);
+  padding: 2rem;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+}
+
+.modal-content.large {
+    max-width: 800px;
+}
+
+.modal-content h2 {
+    margin-bottom: 1.5rem;
+    color: var(--primary-text-color);
+    text-align: left;
+}
+.modal-content p {
+    margin-bottom: 1.5rem;
+}
+
+.modal-content textarea {
+    width: 100%;
+    min-height: 250px;
+    padding: 0.75rem 1rem;
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--primary-text-color);
+    font-size: 1rem;
+    font-family: var(--font-family);
+    resize: vertical;
+}
+
+
+.modal-actions {
+    margin-top: 1.5rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+/* Simple Rich Text Editor */
+.editor-container {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.editor-toolbar {
+    display: flex;
+    gap: 0.25rem;
+    background-color: var(--background-color);
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.editor-toolbar button {
+    background: var(--card-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    font-family: var(--font-family);
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0.25rem 0.75rem;
+}
+.editor-toolbar button:hover {
+    background-color: var(--background-color);
+}
+.editor-container textarea {
+    border: none;
+    border-radius: 0;
+    min-height: 300px;
+}
+
+/* Search */
+.search-bar-container {
+    position: relative;
+    margin-bottom: 2.5rem;
+}
+.search-bar-container svg {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    color: var(--text-color);
+    opacity: 0.5;
+}
+.search-input {
+    width: 100%;
+    padding: 1rem 1rem 1rem 3.5rem;
+    font-size: 1.1rem;
+    background-color: var(--card-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    color: var(--primary-text-color);
+    font-family: var(--font-family);
+}
+.search-results h2, .search-results h3 {
+    margin-bottom: 1rem;
+    color: var(--primary-text-color);
+}
+.search-results h3 {
+    font-size: 1.2rem;
+    margin-top: 2rem;
+}
+.summary-list-item-subject {
+    font-size: 0.9rem;
+    color: var(--text-color);
+    opacity: 0.7;
+}
+
+/* Last Viewed */
+.last-viewed-section {
+    margin-bottom: 2.5rem;
+}
+.last-viewed-section h2 {
+    margin-bottom: 1rem;
+    color: var(--primary-text-color);
+}
+.last-viewed-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+}
+.last-viewed-card {
+    background-color: var(--card-color);
+    border: 1px solid var(--border-color);
+    padding: 1.25rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.last-viewed-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--primary-accent);
+}
+.last-viewed-card h4 {
+    color: var(--primary-text-color);
+    margin-bottom: 0.25rem;
+}
+.last-viewed-card p {
+    font-size: 0.9rem;
+    opacity: 0.7;
+}
+
+/* Streak */
+.streak-display {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background-color: var(--card-color);
+    border-radius: 20px;
+    font-weight: 500;
+    color: var(--primary-text-color);
+    border: 1px solid var(--border-color);
+}
+
+/* Loader */
+.loader-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.loader {
+  border: 4px solid var(--border-color);
+  border-top: 4px solid var(--primary-accent);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+.spinner-sm {
+    width: 16px;
+    height: 16px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    display: inline-block;
+    animation: spin .75s linear infinite;
+}
+
+/* Theme Toggle */
+.theme-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-color);
+}
+.theme-switch-wrapper {
+  display: inline-block;
+  height: 24px;
+  position: relative;
+  width: 44px;
+}
+.theme-switch-wrapper input {
+  display:none;
+}
+.slider {
+  background-color: #444;
+  bottom: 0;
+  cursor: pointer;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  transition: .4s;
+  border-radius: 24px;
+}
+.slider:before {
+  background-color: #fff;
+  bottom: 4px;
+  content: "";
+  height: 16px;
+  left: 4px;
+  position: absolute;
+  transition: .4s;
+  width: 16px;
+  border-radius: 50%;
+}
+input:checked + .slider {
+  background-color: var(--primary-accent);
+}
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 992px) {
+    .toc-container {
+        display: none;
     }
-    throw new Error("Não foi possível gerar conteúdo da IA após múltiplas tentativas.");
-};
-
-
-const enhancedContentSchema = {
-    type: Type.OBJECT,
-    properties: {
-      enhancedContent: {
-        type: Type.STRING,
-        description: 'O conteúdo do resumo aprimorado e reescrito em formato HTML bem formado. Use tags como <h2>, <h3>, <p>, <ul>, <li>, <strong>, etc. Se dados tabulares estiverem presentes, formate-os usando <table>, <thead>, <tbody>, <tr>, <th>, e <td>. Não inclua a tag <h1>.'
-      },
-    },
-    required: ['enhancedContent']
-};
-
-const quizSchema = {
-  type: Type.OBJECT,
-  properties: {
-    questions: {
-      type: Type.ARRAY,
-      description: 'Uma lista de no mínimo 10 questões de múltipla escolha de alto nível, inspiradas em provas de residência médica, mesclando diferentes formatos complexos.',
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          questionNumber: { type: Type.STRING },
-          discipline: { type: Type.STRING },
-          campus: { type: Type.STRING },
-          knowledgeArea: { type: Type.STRING },
-          questionText: { type: Type.STRING },
-          alternatives: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-          },
-          correctAlternativeIndex: { type: Type.INTEGER, description: 'Índice (0-3) da alternativa correta' },
-          explanation: { type: Type.STRING, description: 'Comentário da resposta correta' }
-        },
-        required: ['questionNumber','discipline','campus','knowledgeArea','questionText','alternatives','correctAlternativeIndex','explanation']
-      }
+    .summary-detail-layout {
+        flex-direction: column;
+        padding: 0 1rem;
     }
-  },
-  required: ['questions']
-};
-
-
-const quizExplanationSchema = {
-    type: Type.OBJECT,
-    properties: {
-        explanation: {
-            type: Type.STRING,
-            description: 'Uma explicação curta e clara (1-2 sentenças) do porquê a alternativa é a correta, baseada no contexto fornecido.'
-        }
-    },
-    required: ['explanation']
-};
-
-const flashcardsSchema = {
-  type: Type.OBJECT,
-  properties: {
-    flashcards: {
-      type: Type.ARRAY,
-      description: 'gerar flashcards claros e objetivos a partir dele, organizados em formato de pergunta e resposta, sem incluir valores de exames laboratoriais ou dados numéricos específicos, priorizando conceitos, definições, mecanismos, causas, consequências, classificações e relações clínicas relevantes, de forma que cada flashcard seja curto, direto e facilite a memorização rápida, tendo uma lista de flashcards com frente e verso, deve ser a quantidade necessária para o aluno aprender todo o conteudo presente no resumo .',
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          front: { type: Type.STRING, description: 'O texto da frente do flashcard (pergunta/conceito).' },
-          back: { type: Type.STRING, description: 'O texto do verso do flashcard (resposta/explicação).' }
-        },
-        required: ['front', 'back']
-      }
+}
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem;
     }
-  },
-  required: ['flashcards']
-};
-
-const splitSummariesSchema = {
-    type: Type.OBJECT,
-    properties: {
-      summaries: {
-        type: Type.ARRAY,
-        description: 'Uma lista de resumos, onde cada um contém um título e o conteúdo em HTML.',
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            title: {
-              type: Type.STRING,
-              description: 'O título conciso e informativo para este resumo específico.'
-            },
-            content: {
-              type: Type.STRING,
-              description: 'O conteúdo do resumo em formato HTML bem formado. Use tags como <h2>, <h3>, <p>, <ul>, <li>, etc.'
-            }
-          },
-          required: ['title', 'content']
-        }
-      }
-    },
-    required: ['summaries']
-};
-
-const identifyTitlesSchema = {
-    type: Type.OBJECT,
-    properties: {
-        titles: {
-            type: Type.ARRAY,
-            description: "Uma lista de títulos de resumos concisos e informativos identificados no texto.",
-            items: {
-                type: Type.STRING
-            }
-        }
-    },
-    required: ['titles']
-};
-
-
-const QuizQuestion = ({ question }) => {
-  const [selected, setSelected] = useState(null);
-
-  const handleAnswer = (index) => {
-    if (selected === null) {
-      setSelected(index);
+    .main-header {
+        padding: 1rem;
+        flex-direction: column;
+        align-items: flex-start;
     }
-  };
-
-  return (
-    <div className="quiz-question">
-      <h3>{question.questionNumber}</h3>
-      <p><strong>Disciplina:</strong> {question.discipline}</p>
-      <p><strong>Campus:</strong> {question.campus}</p>
-      <p><strong>Área:</strong> {question.knowledgeArea}</p>
-      <p>{question.questionText}</p>
-
-      <ul>
-        {question.alternatives.map((alt, index) => {
-          const isCorrect = index === question.correctAlternativeIndex;
-          const isSelected = index === selected;
-
-          return (
-            <li
-              key={index}
-              className={`alternative
-                ${isSelected ? 'selected' : ''}
-                ${selected !== null && isCorrect ? 'correct' : ''}
-                ${selected !== null && isSelected && !isCorrect ? 'incorrect' : ''}`}
-              onClick={() => handleAnswer(index)}
-            >
-              {alt}
-            </li>
-          );
-        })}
-      </ul>
-
-      {selected !== null && (
-        <div className="feedback">
-          {selected === question.correctAlternativeIndex ? (
-            <p className="correct">✅ Você acertou!</p>
-          ) : (
-            <>
-              <p className="incorrect">❌ Você errou.</p>
-              <p>
-                A resposta correta é:{" "}
-                <strong>{question.alternatives[question.correctAlternativeIndex]}</strong>
-              </p>
-            </>
-          )}
-
-          <p><strong>Comentário:</strong> {question.explanation}</p>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// --- FUNÇÕES AUXILIARES ---
-// --- FUNÇÕES AUXILIARES ---
-const subjectColors = [
-  '#E63946', // Vermelho
-  '#1D3557', // Azul Escuro
-  '#457B9D', // Azul Médio
-  '#2A9D8F', // Verde-azulado
-  '#E76F51', // Laranja
-  '#FFC300', // Amarelo
-  '#6A057F', // Roxo
-  '#E5989B', // Rosa
-  '#008080'  // Verde-petróleo
-];
-const getNewSubjectColor = (existingSubjects) => {
-    const usedColors = new Set(existingSubjects.map(s => s.color));
-    const availableColor = subjectColors.find(c => !usedColors.has(c));
-    return availableColor || subjectColors[Math.floor(Math.random() * subjectColors.length)];
-};
-
-const getGoogleDriveEmbedUrl = (url) => {
-  if (!url) return null;
-  const regExp = /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/;
-  const match = url.match(regExp);
-  return (match && match[1])
-    ? `https://drive.google.com/file/d/${match[1]}/preview`
-    : null;
-};
-
-// --- COMPONENTES ---
-
-const ThemeToggle = ({ theme, toggleTheme }) => (
-    <div className="theme-switch">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-        <label className="theme-switch-wrapper">
-            <input type="checkbox" checked={theme === 'dark'} onChange={toggleTheme} />
-            <span className="slider"></span>
-        </label>
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-    </div>
-);
-
-const IconButton = ({ onClick, children, className = '', disabled = false }) => (
-    <button className={`icon-btn ${className}`} onClick={(e) => { e.stopPropagation(); onClick(e); }} disabled={disabled}>
-        {children}
-    </button>
-);
-
-const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
-const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>;
-const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
-const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
-const SparklesIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L14.39 8.36L21 9.27L16.36 14.14L18.18 21L12 17.27L5.82 21L7.64 14.14L3 9.27L9.61 8.36L12 2z"/></svg>;
-const ListIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
-
-
-const Breadcrumbs = ({ paths }) => (
-    <nav className="breadcrumbs">
-        {paths.map((path, index) => (
-            <React.Fragment key={index}>
-                {index > 0 && <span className="breadcrumb-separator">/</span>}
-                <button
-                    onClick={path.onClick}
-                    className={`breadcrumb-item ${index === paths.length - 1 ? 'active' : ''}`}
-                    disabled={index === paths.length - 1}
-                >
-                    {path.name}
-                </button>
-            </React.Fragment>
-        ))}
-    </nav>
-);
-
-const LoginScreen = ({ theme, toggleTheme }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleAuthAction = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-        if (isSignUp) {
-            const { error: signUpError } = await supabase.auth.signUp({
-                email,
-                password,
-            });
-
-            if (signUpError) throw signUpError;
-
-            const mercadoPagoCheckoutUrl = 'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=fa9742c919ac44d793ad723d66d9feae';
-            window.location.href = mercadoPagoCheckoutUrl;
-
-        } else {
-            const { error: signInError } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-            });
-            if (signInError) throw signInError;
-        }
-    } catch (error) {
-        setError(error.message || "Ocorreu um erro. Tente novamente.");
-    } finally {
-        setLoading(false);
+    .summary-header {
+        flex-direction: column;
+        align-items: flex-start;
     }
-  };
-
-  return (
-    <div className="login-screen">
-      <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
-      <div className="login-card">
-        <h1>Med<span>flix</span></h1>
-        <p>{isSignUp ? 'Crie sua conta para começar' : 'Faça login para continuar'}</p>
-        <form onSubmit={handleAuthAction}>
-          <div className="form-group">
-            <label htmlFor="email-input">Email</label>
-            <input
-              id="email-input"
-              className="input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="digite seu email"
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label htmlFor="password-input">Senha</label>
-            <input
-              id="password-input"
-              className="input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="digite sua senha"
-              required
-            />
-          </div>
-          {error && <p className="error-message">{error}</p>}
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Carregando...' : (isSignUp ? 'Registrar e Pagar' : 'Entrar')}
-          </button>
-        </form>
-        <button className="toggle-auth-btn" onClick={() => setIsSignUp(!isSignUp)}>
-          {isSignUp ? 'Já tem uma conta? Faça login' : 'Não tem uma conta? Cadastre-se'}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-
-const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
-    const [isLoading, setIsLoading] = useState(false);
-    const [loadingMessage, setLoadingMessage] = useState('');
-    const [error, setError] = useState('');
-    const [audioFile, setAudioFile] = useState(null);
-    const [textContent, setTextContent] = useState('');
-
-    const fileToBase64 = async (file) => {
-        const arrayBuffer = await file.arrayBuffer();
-        let binary = '';
-        const bytes = new Uint8Array(arrayBuffer);
-        const chunkSize = 0x8000;
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-        }
-        return btoa(binary);
-    };
-
-    const handleUpdate = async () => {
-        if (!audioFile && !textContent.trim()) {
-            setError('Por favor, selecione um arquivo de áudio ou cole o texto com as novas informações.');
-            return;
-        }
-        setIsLoading(true);
-        setError('');
-
-        try {
-            let textFromAudio = '';
-            if (audioFile) {
-                setLoadingMessage('Transcrevendo o áudio...');
-                const base64Audio = await fileToBase64(audioFile);
-
-                const transcription = await ai.models.generateContent({
-                    model: "gemini-2.5-flash",
-                    contents: [
-                        { role: "user", parts: [{ text: "Transcreva este áudio para texto em português médico-acadêmico:" }, { inlineData: { mimeType: audioFile.type, data: base64Audio } }] }
-                    ]
-                });
-
-                textFromAudio = transcription.response?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                if (!textFromAudio) {
-                    throw new Error("Falha na transcrição do áudio");
-                }
-            }
-
-            const newInformation = `
-                ${textFromAudio ? `Informações do áudio transcrito:\n"""${textFromAudio}"""\n\n` : ''}
-                ${textContent.trim() ? `Informações do texto fornecido:\n"""${textContent.trim()}"""` : ''}
-            `.trim();
-
-            setLoadingMessage('Atualizando o resumo com as novas informações...');
-
-const updatePrompt = `Você é um especialista em redação médica e acadêmica. Sua tarefa é integrar de forma inteligente novas informações a um resumo existente sobre o mesmo tópico.
-Analise o resumo original e as novas informações fornecidas. Reestruture, reescreva e combine os textos para criar uma versão final aprimorada, coesa e bem organizada. Corrija quaisquer inconsistências e melhore a clareza.
-O resultado final DEVE ser um único bloco de conteúdo em formato HTML bem formado, utilizando tags como <h2>, <h3>, <p>, <ul>, <li>, <strong>, etc., pronto para ser renderizado em uma página web.
-
-**Resumo Original:**
-"""
-${summary.content}
-"""
-
-**Novas Informações a serem Integradas:**
-"""
-${newInformation}
-"""`;
-            const parsedJson = await generateAIContentWithRetry(updatePrompt, enhancedContentSchema);
-
-            setLoadingMessage('Resumo atualizado com sucesso!');
-            await new Promise(res => setTimeout(res, 1000));
-
-            onUpdate(parsedJson.enhancedContent);
-        } catch (e) {
-            console.error(e);
-            setError('Falha ao processar as informações ou atualizar o resumo. Tente novamente.');
-            setIsLoading(false);
-        }
-    };
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
-                {!isLoading ? (
-                    <>
-                        <h2>Atualizar Resumo com IA</h2>
-                        <p>
-                            Faça o upload do áudio da aula ou cole abaixo as anotações. A IA irá analisar e integrar
-                            as informações no resumo atual.
-                        </p>
-
-                        <div className="form-group">
-                            <label>Opção 1: Áudio da Aula</label>
-                            <input
-                                className="input"
-                                type="file"
-                                accept="audio/*"
-                                onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
-                            />
-                        </div>
-
-                        <div className="form-group">
-                             <label>Opção 2: Novas Informações (Texto)</label>
-                             <textarea
-                                placeholder="Cole aqui o texto ou anotações a serem adicionadas ao resumo..."
-                                value={textContent}
-                                onChange={(e) => setTextContent(e.target.value)}
-                                rows={8}
-                            />
-                        </div>
-
-                        {error && <p style={{ color: 'var(--danger-accent)', marginTop: '1rem' }}>{error}</p>}
-                        <div className="modal-actions">
-                            <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-                            <button className="btn btn-primary" onClick={handleUpdate} disabled={!audioFile && !textContent.trim()}>
-                                Processar e Atualizar
-                            </button>
-                        </div>
-                    </>
-                ) : (
-                    <div className="loader-container">
-                        <div className="loader"></div>
-                        <p>{loadingMessage}</p>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
-    const [isLoading, setIsLoading] = useState(false);
-    const [loadingMessage, setLoadingMessage] = useState('');
-    const [error, setError] = useState('');
-    const [textContent, setTextContent] = useState('');
-
-    const handleEnhance = async () => {
-        if (!textContent.trim()) {
-            setError('Por favor, insira o texto para ser aprimorado.');
-            return;
-        }
-        setIsLoading(true);
-        setError('');
-        setLoadingMessage('Aprimorando o texto com IA...');
-        try {
-const prompt = `Você é um especialista em redação acadêmica e médica. Sua tarefa é aprimorar o texto a seguir, tornando-o mais claro, conciso e profissional.
-Reestruture as frases para melhor fluidez, corrija erros gramaticais e de estilo, e organize o conteúdo de forma lógica.
-Formate o resultado final em HTML bem formado, usando títulos (<h2>, <h3>), parágrafos (<p>), listas (<ul>, <li>) e outras tags relevantes para garantir uma excelente legibilidade. Não inclua a tag <h1>.
-
-**Texto para aprimorar:**
-"""
-${textContent}
-"""`;
-            const parsedJson = await generateAIContentWithRetry(prompt, enhancedContentSchema);
-
-            setLoadingMessage('Conteúdo aprimorado com sucesso!');
-            await new Promise(res => setTimeout(res, 1000));
-            onContentEnhanced(parsedJson.enhancedContent);
-        } catch (e) {
-            console.error(e);
-            setError('Falha ao aprimorar o resumo. O texto pode ser muito complexo ou o formato retornado pela IA é inválido. Tente novamente.');
-            setIsLoading(false);
-        }
-    };
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
-                {!isLoading ? (
-                    <>
-                        <h2>Aprimorar Resumo com IA</h2>
-                        <p>Cole abaixo o resumo que você deseja melhorar...</p>
-                        <textarea
-                            placeholder="Cole o texto do resumo aqui..."
-                            value={textContent}
-                            onChange={(e) => setTextContent(e.target.value)}
-                        />
-                        {error && <p style={{color: 'var(--danger-accent)', marginTop: '1rem'}}>{error}</p>}
-                        <div className="modal-actions">
-                            <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-                            <button className="btn btn-primary" onClick={handleEnhance} disabled={!textContent.trim()}>Aprimorar Texto</button>
-                        </div>
-                    </>
-                ) : (
-                    <div className="loader-container">
-                        <div className="loader"></div>
-                        <p>{loadingMessage}</p>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-const AISplitterModal = ({ isOpen, onClose, onSummariesCreated }) => {
-    const [isLoading, setIsLoading] = useState(false);
-    const [loadingMessage, setLoadingMessage] = useState('');
-    const [error, setError] = useState('');
-    const [textContent, setTextContent] = useState('');
-    const [currentStep, setCurrentStep] = useState(1);
-    const [identifiedTitles, setIdentifiedTitles] = useState([]);
-
-    useEffect(() => {
-        if (isOpen) {
-            setTextContent('');
-            setError('');
-            setCurrentStep(1);
-            setIdentifiedTitles([]);
-            setIsLoading(false);
-        }
-    }, [isOpen]);
-
-    if (!isOpen) return null;
-
-    const handleIdentifyTitles = async () => {
-        if (!textContent.trim()) {
-            setError('Por favor, cole o conteúdo do documento.');
-            return;
-        }
-        setIsLoading(true);
-        setError('');
-        setLoadingMessage('Identificando títulos no documento...');
-        try {
-            const prompt = `Você é um assistente especialista em estruturação de conteúdo acadêmico. Sua tarefa é analisar um documento e extrair os títulos de todos os resumos individuais com base em um padrão estrutural específico.
-
-**INSTRUÇÃO CRÍTICA:** O padrão para identificar um título é que ele aparece **imediatamente na linha de baixo após o nome da disciplina**, que está em maiúsculas. Por exemplo:
-- \`Anatomia III
-    Telencefalo\`
-- \`Fisiologia III
-    Sistema Nervoso Autônomo 1\`
-
-Nos exemplos acima, você deve extrair "Telencefalo" e "Sistema Nervoso Autônomo 1". Ignore o nome da disciplina no seu resultado.
-
-Analise todo o texto abaixo, identifique todos os títulos dos resumos seguindo esta regra.
-
-**Texto para Análise:**
-"""
-${textContent}
-"""`;
-            const parsedJson = await generateAIContentWithRetry(prompt, identifyTitlesSchema);
-            const uniqueTitles = [...new Set(parsedJson.titles || [])];
-            setIdentifiedTitles(uniqueTitles.map((title, index) => ({ id: index, name: title })));
-            setCurrentStep(2);
-        } catch (e) {
-            console.error(e);
-            setError('Não foi possível identificar os títulos. Verifique se o texto segue o padrão esperado ou se o modelo está sobrecarregado.');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleGenerateSummaries = async () => {
-        const finalTitles = identifiedTitles.map(t => t.name.trim()).filter(Boolean);
-        if (finalTitles.length === 0) {
-            setError("Nenhum título válido para gerar resumos. Adicione ou edite a lista.");
-            return;
-        }
-
-        setIsLoading(true);
-        setError('');
-        setLoadingMessage('Gerando conteúdo dos resumos...');
-
-        try {
-            const prompt = `Sua tarefa é criar um resumo detalhado para cada título na lista fornecida, usando o documento de texto completo como contexto. Para cada título, localize a seção correspondente no documento e extraia/reescreva o conteúdo. Formate o conteúdo em HTML bem-formado (usando <p>, <ul>, <li>, <strong>, etc.). Retorne uma lista de objetos, cada um contendo o 'title' e seu 'content' em HTML correspondente.
-
-**Lista de Títulos para Processar:**
-${JSON.stringify(finalTitles)}
-
-**Documento de Texto Completo:**
-"""
-${textContent}
-"""`;
-
-            const parsedJson = await generateAIContentWithRetry(prompt, splitSummariesSchema);
-            if (!parsedJson.summaries || parsedJson.summaries.length === 0) {
-                throw new Error("A IA não conseguiu gerar os resumos para os títulos fornecidos.");
-            }
-            setLoadingMessage(`${parsedJson.summaries.length} resumos criados com sucesso!`);
-            await new Promise(res => setTimeout(res, 1500));
-            onSummariesCreated(parsedJson.summaries);
-
-        } catch (e) {
-            console.error(e);
-            setError('Falha ao gerar os resumos. Verifique se os títulos correspondem ao conteúdo do texto.');
-            setIsLoading(false);
-        }
-    };
-
-    const handleTitleNameChange = (id, newName) => {
-        setIdentifiedTitles(titles =>
-            titles.map(t => t.id === id ? { ...t, name: newName } : t)
-        );
-    };
-
-    const addTitleField = () => {
-        setIdentifiedTitles(titles => [...titles, { id: Date.now(), name: '' }]);
-    };
-
-    const removeTitleField = (id) => {
-        setIdentifiedTitles(titles => titles.filter(t => t.id !== id));
-    };
-
-    const renderStepOne = () => (
-        <>
-            <h2>Gerar Resumos em Lote com IA</h2>
-            <p>**Etapa 1:** Cole o documento da disciplina abaixo. A IA irá identificar e sugerir os títulos dos resumos.</p>
-            <div className="modal-form-content" style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '1rem' }}>
-                <div className="form-group">
-                    <label htmlFor="summary-full-content">Conteúdo Completo da Disciplina</label>
-                    <textarea
-                        id="summary-full-content"
-                        placeholder="Cole aqui o texto bruto que contém o conteúdo de todos os resumos para esta disciplina..."
-                        value={textContent}
-                        onChange={(e) => setTextContent(e.target.value)}
-                        rows={15}
-                        required
-                    />
-                </div>
-            </div>
-            {error && <p style={{ color: 'var(--danger-accent)', marginTop: '1rem' }}>{error}</p>}
-            <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-                <button className="btn btn-primary" onClick={handleIdentifyTitles} disabled={!textContent.trim()}>1. Identificar Títulos</button>
-            </div>
-        </>
-    );
-
-    const renderStepTwo = () => (
-         <>
-            <h2>Gerar Resumos em Lote com IA</h2>
-            <p>**Etapa 2:** Revise, edite, adicione ou remova os títulos sugeridos. Em seguida, gere os resumos.</p>
-            <div className="modal-form-content" style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '1rem' }}>
-                 <div className="form-group">
-                    <label>Títulos Sugeridos</label>
-                    {identifiedTitles.map((title, index) => (
-                        <div key={title.id} className="dynamic-input-group">
-                            <input
-                                className="input"
-                                type="text"
-                                value={title.name}
-                                onChange={(e) => handleTitleNameChange(title.id, e.target.value)}
-                                placeholder={`Título do Resumo ${index + 1}`}
-                            />
-                            <IconButton onClick={() => removeTitleField(title.id)} className="danger-icon-btn">
-                                <DeleteIcon />
-                            </IconButton>
-                        </div>
-                    ))}
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={addTitleField}>Adicionar Título</button>
-                </div>
-            </div>
-            {error && <p style={{ color: 'var(--danger-accent)', marginTop: '1rem' }}>{error}</p>}
-            <div className="modal-actions">
-                 <button className="btn btn-secondary" onClick={() => setCurrentStep(1)}>Voltar</button>
-                <button className="btn btn-primary" onClick={handleGenerateSummaries} disabled={identifiedTitles.every(t => t.name.trim() === '')}>2. Gerar Resumos para estes Títulos</button>
-            </div>
-        </>
-    );
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
-                {isLoading ? (
-                    <div className="loader-container">
-                        <div className="loader"></div>
-                        <p>{loadingMessage}</p>
-                    </div>
-                ) : (
-                    currentStep === 1 ? renderStepOne() : renderStepTwo()
-                )}
-            </div>
-        </div>
-    );
-};
-
-const ReportsDashboard = () => {
-    const [reportData, setReportData] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [studentsPerTerm, setStudentsPerTerm] = useState([]);
-    const [costs, setCosts] = useState(0);
-
-    const formatCurrency = (value) => (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-    const fetchData = async (currentCosts) => {
-        setLoading(true);
-        try {
-            const { data: studentsData, error: studentsError } = await supabase.rpc('get_students_per_term');
-            if (studentsError) throw studentsError;
-            setStudentsPerTerm(studentsData);
-
-            const { data: statsData, error: statsError } = await supabase.rpc('get_admin_dashboard_stats', { operational_costs: currentCosts });
-            if (statsError) throw statsError;
-            setReportData(statsData);
-
-        } catch (error) {
-            console.error("Erro ao carregar dados do admin:", error);
-            alert("Não foi possível carregar os relatórios.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchData(costs);
-    }, []);
-
-    const handleCostsChange = (e) => setCosts(e.target.value === '' ? 0 : parseFloat(e.target.value));
-    const handleUpdateCosts = () => fetchData(costs);
-
-    if (loading) return <div className="loader-container"><div className="loader"></div></div>;
-    if (!reportData) return <div>Não foi possível carregar os dados.</div>;
-
-    return (
-        <div className="admin-reports">
-            <div className="stat-cards-grid">
-                <div className="stat-card"><h4>Faturamento Bruto Mensal</h4><p>{formatCurrency(reportData.total_revenue_monthly)}</p></div>
-                <div className="stat-card"><h4>Lucro Líquido Mensal</h4><p>{formatCurrency(reportData.net_profit_monthly)}</p></div>
-                <div className="stat-card"><h4>Total de Alunos Ativos</h4><p>{reportData.total_students}</p></div>
-                <div className="stat-card"><h4>Custo por Aluno</h4><p>{formatCurrency(reportData.monthly_price_per_student)}</p></div>
-            </div>
-
-            <div className="admin-section">
-                <h2>Alunos por Período</h2>
-                <table className="admin-table">
-                    <thead><tr><th>Período</th><th>Nº de Alunos</th></tr></thead>
-                    <tbody>
-                        {studentsPerTerm.map(term => (
-                            <tr key={term.term_id}><td>{term.term_name}</td><td>{term.student_count}</td></tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            <div className="admin-section">
-                <h2>Cálculo de Lucro e Comissões</h2>
-                 <div className="costs-input-section">
-                    <label htmlFor="costs-input">Custos Operacionais Mensais (ex: servidor, ferramentas)</label>
-                    <div className="input-group">
-                        <input id="costs-input" type="number" value={costs} onChange={handleCostsChange} className="input" placeholder="R$ 0,00" />
-                        <button onClick={handleUpdateCosts} className="btn btn-primary">Recalcular Lucro</button>
-                    </div>
-                </div>
-                <table className="admin-table">
-                    <thead>
-                        <tr>
-                            <th>Embaixador</th>
-                            <th>Período</th>
-                            <th>Alunos no Período</th>
-                            <th>% Comissão</th>
-                            <th>Valor a Pagar</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {reportData.embaixador_commissions_details?.map((detail, index) => (
-                            <tr key={index}>
-                                <td>{detail.embaixador_email}</td>
-                                <td>{detail.term_name}</td>
-                                <td>{detail.students_in_term}</td>
-                                <td>{detail.commission_percentage}%</td>
-                                <td>{formatCurrency(detail.commission_to_pay)}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-};
-
-
-const AdminPanel = ({ onBack }) => {
-    const [activeTab, setActiveTab] = useState('reports');
-
-    const UserManagementPanel = () => {
-        const [users, setUsers] = useState([]);
-        const [loadingUsers, setLoadingUsers] = useState(true);
-
-        const fetchUsers = async () => {
-            setLoadingUsers(true);
-            try {
-                const { data, error } = await supabase.from('profiles').select('id, email, role, status').order('email');
-                if (error) throw error;
-                setUsers(data || []);
-            } catch (error) {
-                console.error("Erro ao carregar usuários:", error);
-                alert("Não foi possível carregar a lista de usuários.");
-            } finally {
-                setLoadingUsers(false);
-            }
-        };
-
-        const handleUpdateUserStatus = async (userId, newStatus) => {
-            const { error } = await supabase.from('profiles').update({ status: newStatus }).eq('id', userId);
-            if (error) {
-                alert(`Falha ao atualizar o status do usuário: ${error.message}`);
-            } else {
-                fetchUsers();
-            }
-        };
-
-        useEffect(() => {
-            fetchUsers();
-        }, []);
-
-        if (loadingUsers) return <div className="loader"></div>;
-
-        return (
-            <div className="admin-section">
-                <h2>Gerenciamento de Usuários</h2>
-                 <table className="admin-table">
-                    <thead>
-                        <tr>
-                            <th>Email</th>
-                            <th>Status</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {users.filter(u => u.role !== 'admin').map(user => (
-                            <tr key={user.id}>
-                                <td>{user.email}</td>
-                                <td>
-                                    <span className={`status-badge status-${user.status || 'default'}`}>
-                                        {user.status === 'pending_approval' ? 'Pendente' : user.status === 'active' ? 'Ativo' : user.status === 'blocked' ? 'Bloqueado' : 'Indefinido'}
-                                    </span>
-                                </td>
-                                <td className="user-actions">
-                                    {user.status !== 'active' && <button className="btn btn-sm btn-success" onClick={() => handleUpdateUserStatus(user.id, 'active')}>Liberar</button>}
-                                    {user.status !== 'blocked' && <button className="btn btn-sm btn-danger" onClick={() => handleUpdateUserStatus(user.id, 'blocked')}>Bloquear</button>}
-                                    {user.status === 'blocked' && <button className="btn btn-sm btn-secondary" onClick={() => handleUpdateUserStatus(user.id, 'active')}>Desbloquear</button>}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        );
-    };
-
-    return (
-        <div className="container admin-panel">
-            <div className="dashboard-header">
-                <h1>Painel Administrativo</h1>
-                <button className="btn btn-secondary" onClick={onBack}>Voltar</button>
-            </div>
-            <nav className="tabs-nav admin-tabs">
-                <button className={`tab-button ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>Relatórios</button>
-                <button className={`tab-button ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>Usuários</button>
-            </nav>
-            <div className="tab-content">
-                {activeTab === 'reports' && <ReportsDashboard />}
-                {activeTab === 'users' && <UserManagementPanel />}
-            </div>
-        </div>
-    );
-};
-
-
-// ALTERADO: Adicionado novas props para os botões e estados de loading
-const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, completedSummaries, onNavigateToAdmin, onGenerateFlashcardsForAll, onGenerateQuizForAll, isBatchLoading, batchLoadingMessage }) => {
-  const isSearching = searchQuery.trim() !== '';
-  const isAdminOrAmbassador = user.role === 'admin' || user.role === 'embaixador';
-
-  return (
-    <div className="container dashboard">
-      <div className="dashboard-header">
-        <h1>{isSearching ? "Resultados da Busca" : "Início"}</h1>
-        <div className="header-actions">
-            {user.role === 'admin' && <button className="btn btn-primary" onClick={onNavigateToAdmin}>Painel Admin</button>}
-            <ThemeToggle theme={theme} toggleTheme={toggleTheme}/>
-            <button className="btn btn-secondary" onClick={onLogout}>Sair</button>
-        </div>
-      </div>
-
-      <div className="search-bar-container">
-          <SearchIcon />
-          <input type="text" placeholder="Buscar disciplinas ou resumos..." className="search-input" value={searchQuery} onChange={onSearchChange}/>
-      </div>
-
-      {isSearching ? (
-        <div className="search-results">
-          {searchResults.subjects.length > 0 && <h3>Disciplinas</h3>}
-          <div className="subject-grid">
-              {searchResults.subjects.map(subject => (
-                <div key={subject.id} className="subject-card" style={{ backgroundColor: subject.color }} onClick={() => onSelectSubject(subject)}>
-                    <h3>{subject.name}</h3>
-                    <p>{subject.summaryCount} resumos</p>
-                </div>
-            ))}
-          </div>
-          {searchResults.summaries.length > 0 && <h3>Resumos</h3>}
-          <ul className="summary-list">
-              {searchResults.summaries.map(summary => (
-                  <li key={summary.id} className="summary-list-item" onClick={() => onSelectSummary(summary)}>
-                      <div className="summary-list-item-title">{summary.title}</div>
-                      <span className="summary-list-item-subject">{summary.subjectName}</span>
-                  </li>
-              ))}
-          </ul>
-        </div>
-      ) : (
-        <>
-          {lastViewed.length > 0 && (
-            <div className="last-viewed-section">
-                <h2>Continue de Onde Parou</h2>
-                <div className="last-viewed-grid">
-                    {lastViewed.map(summary => (
-                        <div key={summary.id} className="last-viewed-card" onClick={() => onSelectSummary(summary)}>
-                            <h4>{summary.title}</h4>
-                            <p>{summary.subjectName}</p>
-                        </div>
-                    ))}
-                </div>
-            </div>
-          )}
-
-          {/* NOVO: Container para os botões de ação em lote */}
-          {isAdminOrAmbassador && (
-            <div className="dashboard-global-actions">
-              {isBatchLoading ? (
-                <div className="batch-loader">
-                  <div className="loader-sm"></div>
-                  <p>{batchLoadingMessage}</p>
-                </div>
-              ) : (
-                <>
-                  <button className="btn btn-secondary" onClick={onGenerateFlashcardsForAll} disabled={isBatchLoading}>
-                    Gerar Flashcards para Faltantes
-                  </button>
-                  <button className="btn btn-secondary" onClick={onGenerateQuizForAll} disabled={isBatchLoading}>
-                    Gerar Questões para Faltantes
-                  </button>
-                  <button className="btn btn-primary" onClick={onAddSubject}>
-                    Adicionar Disciplina
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-
-          <div className="subject-grid">
-            {subjects.map(subject => {
-              const subjectSummaries = searchResults.allSummaries.filter(s => s.subject_id === subject.id);
-              const completedCount = subjectSummaries.filter(s => completedSummaries.includes(s.id)).length;
-              const progress = subjectSummaries.length > 0 ? (completedCount / subjectSummaries.length) * 100 : 0;
-              return (
-                <div key={subject.id} className="subject-card" style={{ backgroundColor: subject.color }} onClick={() => onSelectSubject(subject)}>
-                  <h3>{subject.name}</h3>
-                  <div className="subject-card-progress">
-                    <p>{completedCount} de {subjectSummaries.length} concluídos</p>
-                    <div className="progress-bar"><div className="progress-bar-inner" style={{ width: `${progress}%` }}></div></div>
-                  </div>
-                  {isAdminOrAmbassador && (
-                    <div className="card-actions">
-                      <IconButton onClick={(e) => onEditSubject(subject)}><EditIcon /></IconButton>
-                      <IconButton onClick={(e) => onDeleteSubject(subject.id)}><DeleteIcon /></IconButton>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
-const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user, terms }) => {
-    const [name, setName] = useState('');
-    const [selectedTermId, setSelectedTermId] = useState('');
-    // NOVO: Adiciona um estado para a cor selecionada
-    const [color, setColor] = useState('');
-    const isAdminOrAmbassador = user?.role === 'admin' || user?.role === 'embaixador';
-
-    useEffect(() => {
-        if (isOpen) {
-            setName(subject?.name || '');
-            setSelectedTermId(subject?.term_id || (isAdminOrAmbassador ? '' : user?.term_id));
-            // NOVO: Define a cor atual do subject ou a primeira cor da lista se for um novo
-            setColor(subject?.color || subjectColors[0]);
-        }
-    }, [isOpen, subject, user, isAdminOrAmbassador]);
-
-    if (!isOpen) return null;
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-
-        if (isAdminOrAmbassador && !selectedTermId) {
-            alert('Por favor, selecione um período para esta disciplina.');
-            return;
-        }
-
-        // MODIFICADO: A cor agora vem do estado, não é mais gerada aleatoriamente
-        const termIdToSave = isAdminOrAmbassador ? selectedTermId : user?.term_id;
-
-        onSave({ ...subject, name, color, term_id: termIdToSave });
-    };
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content" onClick={e => e.stopPropagation()}>
-                <h2>{subject ? 'Editar' : 'Adicionar'} Disciplina</h2>
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label htmlFor="subject-name">Nome da Disciplina</label>
-                        <input id="subject-name" className="input" type="text" value={name} onChange={e => setName(e.target.value)} required />
-                    </div>
-
-                    {isAdminOrAmbassador && (
-                        <div className="form-group">
-                            <label htmlFor="term-select-subject">Período</label>
-                            <select
-                                id="term-select-subject"
-                                className="select-input"
-                                value={selectedTermId}
-                                onChange={(e) => setSelectedTermId(e.target.value)}
-                                required
-                            >
-                                <option value="" disabled>Selecione um período...</option>
-                                {terms.map(term => (
-                                    <option key={term.id} value={term.id}>{term.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-
-                    {/* NOVO: Seletor de Cores */}
-                    <div className="form-group">
-                        <label>Cor da Disciplina</label>
-                        <div className="color-selector">
-                            {subjectColors.map((c, index) => (
-                                <div
-                                    key={index}
-                                    className={`color-swatch ${color === c ? 'selected' : ''}`}
-                                    style={{ backgroundColor: c }}
-                                    onClick={() => setColor(c)}
-                                />
-                            ))}
-                        </div>
-                    </div>
-
-
-                    <div className="modal-actions">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-                        <button type="submit" className="btn btn-primary">Salvar</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-const SimpleRichTextEditor = ({ value, onChange, textareaRef }) => {
-    const format = (tag) => {
-        const textarea = textareaRef.current;
-        if (!textarea) return;
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const selectedText = value.substring(start, end);
-        const newText = `${value.substring(0, start)}<${tag}>${selectedText}</${tag}>${value.substring(end)}`;
-        onChange(newText);
-    };
-
-    return (
-        <div className="editor-container">
-            <div className="editor-toolbar">
-                <button type="button" onClick={() => format('strong')}><b>B</b></button>
-                <button type="button" onClick={() => format('em')}><i>I</i></button>
-                <button type="button" onClick={() => format('h2')}>H2</button>
-                <button type="button" onClick={() => format('h3')}>H3</button>
-                <button type="button" onClick={() => format('p')}>P</button>
-            </div>
-            <textarea
-                ref={textareaRef}
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                placeholder="Comece a escrever o conteúdo do resumo aqui..."
-            />
-        </div>
-    );
-};
-
-const SummaryModal = ({ isOpen, onClose, onSave, summary, subjectId }) => {
-    const [title, setTitle] = useState('');
-    const [content, setContent] = useState('');
-    const [video, setVideo] = useState('');
-    const [isAIEnhanceModalOpen, setAIEnhanceModalOpen] = useState(false);
-    const textareaRef = useRef(null);
-
-    useEffect(() => {
-        if (isOpen) {
-            setTitle(summary?.title || '');
-            setContent(String(summary?.content || ''));
-            setVideo(summary?.video || '');
-        }
-    }, [isOpen, summary]);
-
-    if (!isOpen) return null;
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        onSave({ ...summary, title, content, video, subject_id: subjectId });
-    };
-
-    return (
-        <>
-            <div className="modal-overlay" onClick={onClose}>
-                <div className="modal-content large" onClick={e => e.stopPropagation()}>
-                    <h2>{summary ? 'Editar' : 'Adicionar'} Resumo</h2>
-                    <form onSubmit={handleSubmit}>
-                        <div className="form-group">
-                            <label htmlFor="summary-title">Título</label>
-                            <input id="summary-title" className="input" type="text" value={title} onChange={e => setTitle(e.target.value)} required />
-                        </div>
-                        <div className="form-group">
-                            <label>Conteúdo</label>
-                            <SimpleRichTextEditor value={content} onChange={setContent} textareaRef={textareaRef} />
-                        </div>
-
-                         <div className="form-group">
-                            <label htmlFor="summary-video-link">Link do Vídeo do Google Drive</label>
-                            <input
-                                id="summary-video-link"
-                                className="input"
-                                type="url"
-                                placeholder="https://drive.google.com/file/d/..."
-                                value={video}
-                                onChange={e => setVideo(e.target.value)}
-                            />
-                        </div>
-
-                        <div className="modal-actions">
-                             <button type="button" className="btn btn-secondary" onClick={() => setAIEnhanceModalOpen(true)}>Aprimorar com IA</button>
-                            <div>
-                                <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-                                <button type="submit" className="btn btn-primary">Salvar</button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>
-            {isAIEnhanceModalOpen && <AIEnhancementModal onClose={() => setAIEnhanceModalOpen(false)} onContentEnhanced={(enhanced) => { setContent(enhanced); setAIEnhanceModalOpen(false);}} />}
-        </>
-    );
-};
-
-const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, onEditSummary, onDeleteSummary, user, completedSummaries, onAISplit, onReorderSummaries, onGenerateFlashcardsForAll, onGenerateQuizForAll, isBatchLoading, batchLoadingMessage }) => {
-    const handleDragEnd = (result) => {
-        const { destination, source } = result;
-        if (!destination || (destination.droppableId === source.droppableId && destination.index === source.index)) {
-            return;
-        }
-        onReorderSummaries(source.index, destination.index);
-    };
-    const isAdminOrAmbassador = user.role === 'admin' || user.role === 'embaixador';
-
-    return (
-        <div className="container summary-list-view">
-            <div className="dashboard-header">
-                <h1>{subject.name}</h1>
-                 {isAdminOrAmbassador && (
-                    isBatchLoading ? (
-                         <div className="batch-loader">
-                            <div className="loader-sm"></div>
-                            <p>{batchLoadingMessage}</p>
-                        </div>
-                    ) : (
-                        <div className="dashboard-main-actions">
-                             <button className="btn btn-secondary" onClick={onGenerateFlashcardsForAll}>Gerar Flashcards para Todos</button>
-                             <button className="btn btn-secondary" onClick={onGenerateQuizForAll}>Gerar Questões para Todas</button>
-                             <button className="btn btn-secondary" onClick={onAISplit}>
-                               Adicionar Resumos em Lote
-                            </button>
-                            <button className="btn btn-primary" onClick={onAddSummary}>
-                               Adicionar Resumo
-                            </button>
-                        </div>
-                    )
-                )}
-            </div>
-
-            {summaries.length > 0 ? (
-                <DragDropContext onDragEnd={handleDragEnd}>
-                    <Droppable droppableId="summaries-list">
-                        {(provided) => (
-                            <ul className="summary-list" {...provided.droppableProps} ref={provided.innerRef}>
-                                {summaries.map((summary, index) => {
-                                    const isCompleted = completedSummaries.includes(summary.id);
-                                    return (
-                                        <Draggable key={summary.id} draggableId={String(summary.id)} index={index} isDragDisabled={!isAdminOrAmbassador}>
-                                            {(provided, snapshot) => (
-                                                <li
-                                                    ref={provided.innerRef}
-                                                    {...provided.draggableProps}
-                                                    {...provided.dragHandleProps}
-                                                    className={`summary-list-item ${snapshot.isDragging ? 'is-dragging' : ''}`}
-                                                    style={{ ...provided.draggableProps.style }}
-                                                >
-                                                    <div className="summary-list-item-title" onClick={() => onSelectSummary(summary)}>
-                                                        {isCompleted && <span className="completion-check"><CheckCircleIcon /></span>}
-                                                        {summary.title}
-                                                    </div>
-                                                    {isAdminOrAmbassador && (
-                                                        <div className="summary-list-item-actions">
-                                                            <IconButton onClick={() => onEditSummary(summary)}><EditIcon/></IconButton>
-                                                            <IconButton onClick={() => onDeleteSummary(summary.id)}><DeleteIcon/></IconButton>
-                                                        </div>
-                                                    )}
-                                                </li>
-                                            )}
-                                        </Draggable>
-                                    );
-                                })}
-                                {provided.placeholder}
-                            </ul>
-                        )}
-                    </Droppable>
-                </DragDropContext>
-            ) : (
-                <div className="empty-state">
-                    <h2>Nenhum resumo aqui ainda</h2>
-                    <p>Que tal começar adicionando o primeiro resumo para esta disciplina?</p>
-                    {isAdminOrAmbassador && (
-                        <div className="empty-state-actions">
-                             <button className="btn btn-secondary" onClick={onAISplit}>Adicionar Resumos em Lote</button>
-                            <button className="btn btn-primary" onClick={onAddSummary}>Criar Manualmente</button>
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
-    );
-};
-
-
-const QuizView = ({ questions, onGetExplanation }) => {
-    const [answers, setAnswers] = useState({});
-    const [explanations, setExplanations] = useState({});
-    const [loadingExplanation, setLoadingExplanation] = useState(null);
-
-    const handleAnswer = async (questionIndex, alternativeIndex) => {
-        if (answers[questionIndex] !== undefined) return;
-        setAnswers(prev => ({ ...prev, [questionIndex]: alternativeIndex }));
-
-        const isCorrect = questions[questionIndex].correctAlternativeIndex === alternativeIndex;
-        if (isCorrect) {
-            setLoadingExplanation(questionIndex);
-            try {
-                const explanationText = await onGetExplanation(
-                    questions[questionIndex].questionText,
-                    questions[questionIndex].alternatives[alternativeIndex]
-                );
-                setExplanations(prev => ({ ...prev, [questionIndex]: explanationText }));
-            } catch (error) {
-                console.error("Failed to get explanation:", error);
-                setExplanations(prev => ({...prev, [questionIndex]: "Não foi possível carregar a explicação."}));
-            } finally {
-                setLoadingExplanation(null);
-            }
-        }
-    };
-
-    return (
-        <div className="quiz-container">
-            <h2>Teste seu Conhecimento</h2>
-            {questions.map((q, qIndex) => {
-                const userAnswer = answers[qIndex];
-                const isAnswered = userAnswer !== undefined;
-                return (
-                    <div key={qIndex} className="question-block">
-                        <p className="question-text">{qIndex + 1}. {q.questionText}</p>
-                        <div className="alternatives-list">
-                            {q.alternatives.map((alt, aIndex) => {
-                                let btnClass = 'alternative-item';
-                                if (isAnswered) {
-                                    if (aIndex === q.correctAlternativeIndex) {
-                                        btnClass += ' correct';
-                                    } else if (aIndex === userAnswer) {
-                                        btnClass += ' incorrect';
-                                    }
-                                }
-                                return (
-                                    <button
-                                        key={aIndex}
-                                        className={btnClass}
-                                        onClick={() => handleAnswer(qIndex, aIndex)}
-                                        disabled={isAnswered}
-                                    >
-                                        {alt}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        {isAnswered && explanations[qIndex] && (
-                             <div className="explanation-box">{explanations[qIndex]}</div>
-                        )}
-                        {loadingExplanation === qIndex && <div className="explanation-box"><div className="loader-sm"></div></div>}
-                    </div>
-                );
-            })}
-        </div>
-    );
-};
-
-const FlashcardView = ({ flashcards, summaryId }) => {
-    const [deck, setDeck] = useState([]);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const [isFlipped, setIsFlipped] = useState(false);
-    const [isFinished, setIsFinished] = useState(false);
-
-    useEffect(() => {
-        const safeFlashcards = Array.isArray(flashcards) ? flashcards : [];
-        setDeck(safeFlashcards.map(f => ({...f, id: Math.random()})).sort(() => Math.random() - 0.5));
-        setCurrentIndex(0);
-        setIsFlipped(false);
-        setIsFinished(false);
-    }, [flashcards, summaryId]);
-
-    const handleFlip = () => setIsFlipped(prev => !prev);
-
-    const processAnswer = (knows) => {
-        setIsFlipped(false);
-
-        setTimeout(() => {
-            if (knows) {
-                const newDeck = deck.filter((_, index) => index !== currentIndex);
-                if (newDeck.length === 0) {
-                    setIsFinished(true);
-                } else {
-                    setDeck(newDeck);
-                    setCurrentIndex(currentIndex % newDeck.length);
-                }
-            } else {
-                setCurrentIndex((currentIndex + 1) % deck.length);
-            }
-        }, 300);
-    };
-
-    const handleAnswer = (knows) => {
-        if (!isFlipped) {
-            setIsFlipped(true);
-            setTimeout(() => processAnswer(knows), 1000);
-        } else {
-            processAnswer(knows);
-        }
-    };
-
-    const handleReset = () => {
-        const safeFlashcards = Array.isArray(flashcards) ? flashcards : [];
-        setDeck(safeFlashcards.map(f => ({...f, id: Math.random()})).sort(() => Math.random() - 0.5));
-        setCurrentIndex(0);
-        setIsFlipped(false);
-        setIsFinished(false);
-    };
-
-    if (isFinished) {
-        return (
-            <div className="flashcard-container finished-deck">
-                <h2>Parabéns!</h2>
-                <p>Você revisou todos os flashcards.</p>
-                <button className="btn btn-primary" onClick={handleReset}>Estudar Novamente</button>
-            </div>
-        );
+    .tabs-nav {
+        flex-wrap: wrap;
     }
+}
 
-    if (!deck || deck.length === 0) {
-        return <div className="flashcard-container"><p>Nenhum flashcard para exibir.</p></div>;
-    }
+/* Novas Animações e Efeitos */
 
-    const currentCard = deck[currentIndex];
+@keyframes fadeInSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
-    return (
-        <div className="flashcard-container">
-            <div className="flashcard-progress">
-                <span>{deck.length} restantes</span>
-            </div>
-            <div className={`flashcard ${isFlipped ? 'is-flipped' : ''}`} onClick={handleFlip}>
-                <div className="flashcard-inner">
-                    <div className="flashcard-front">
-                        <p>{currentCard.front}</p>
-                    </div>
-                    <div className="flashcard-back">
-                        <p>{currentCard.back}</p>
-                    </div>
-                </div>
-            </div>
-            <div className="flashcard-actions">
-                <button className="btn btn-action-dont-know" onClick={() => handleAnswer(false)}>Não Lembro</button>
-                <button className="btn btn-action-know" onClick={() => handleAnswer(true)}>Já Domino</button>
-            </div>
-        </div>
-    );
-};
+/* Ajuste para o formulário de login sem o link de cadastro */
+.login-card form {
+  margin-bottom: 0; /* Remove a margem que existia para o link */
+}
 
-const TableOfContents = ({ content }) => {
-    const [headings, setHeadings] = useState([]);
+.login-card .btn-primary {
+    width: 100%; /* Faz o botão ocupar a largura toda */
+    margin-top: 1rem; /* Adiciona um espaço acima do botão */
+}
 
-    useEffect(() => {
-        const summaryContentElement = document.querySelector('.summary-content');
-        if (!summaryContentElement) return;
+/* --- Ajustes para o Modo Claro na Tela de Login --- */
 
-        const newHeadings = [];
-        summaryContentElement.querySelectorAll('h2, h3').forEach((h, index) => {
-            const text = h.textContent;
-            const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + `-${index}`;
-            h.id = id;
-            newHeadings.push({
-                id,
-                text,
-                level: h.tagName.toLowerCase() === 'h2' ? 1 : 2
-            });
-        });
-        setHeadings(newHeadings);
-    }, [content]);
+body.light-mode .login-screen {
+  /* Gradiente mais suave para o modo claro */
+  background-image: radial-gradient(circle at center, #e0e8f0 0%, var(--background-color) 70%);
+}
 
-    const handleTocClick = (e, id) => {
-        e.preventDefault();
-        const element = document.getElementById(id);
-        if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-    };
+body.light-mode .login-card {
+  /* Remove o efeito de vidro e torna o card sólido */
+  background: var(--card-color); /* Usa o branco definido nas variáveis */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 
-    if (headings.length === 0) return null;
+  /* Borda sólida e sombra mais definida */
+  border: 1px solid var(--border-color);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
 
-    return (
-        <aside className="toc-container">
-            <h4>Neste Resumo</h4>
-            <ul>
-                {headings.map(h => (
-                    <li key={h.id} className={`toc-level-${h.level}`}>
-                        <a href={`#${h.id}`} onClick={(e) => handleTocClick(e, h.id)}>{h.text}</a>
-                    </li>
-                ))}
-            </ul>
-        </aside>
-    );
-};
+body.light-mode .login-card .input,
+body.light-mode .login-card .select-input {
+  /* Ajusta os inputs para o fundo claro */
+  background-color: var(--background-color); /* Usa o cinza claro do fundo */
+  border-color: #d1d9e6;
+}
 
-const GoogleDrivePlayer = ({ url }) => {
-    const embedUrl = getGoogleDriveEmbedUrl(url);
-    if (!embedUrl) return <p>Link do Google Drive inválido.</p>;
-    return (
-        <div className="youtube-player-container">
-            <iframe
-                src={embedUrl}
-                allow="autoplay; fullscreen"
-                frameBorder="0"
-                title="Vídeo do Google Drive"
-                allowFullScreen>
-            </iframe>
-        </div>
-    );
-};
+body.light-mode .login-card .input:focus,
+body.light-mode .login-card .select-input:focus {
+  border-color: var(--primary-accent);
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15); /* Brilho mais sutil */
+}
+/* Loader */
 
-const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate, onGenerateFlashcards }) => {
-    const [activeTab, setActiveTab] = useState('summary');
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [isTocVisible, setIsTocVisible] = useState(true);
-    const isAdminOrAmbassador = user.role === 'admin' || user.role === 'embaixador';
+/* Sobreposição de tela cheia para o carregamento inicial */
+.loading-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: fixed; /* Chave para a sobreposição */
+  top: 0;
+  left: 0;
+  width: 100vw; /* Largura total da viewport */
+  height: 100vh; /* Altura total da viewport */
+  background-color: var(--background-color); /* Usa a cor de fundo do tema */
+  z-index: 9999; /* Garante que fique acima de todo o conteúdo */
+  gap: 1.5rem; /* Espaço entre o spinner e o texto */
+}
 
-    useEffect(() => {
-        setIsTocVisible(true);
-    }, [summary]);
+/* Container de loader para modais ou seções menores */
+.loader-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 2rem; /* Adiciona um espaçamento interno */
+}
 
-    const handleGenerateQuiz = async () => {
-        if (window.confirm("Tem certeza que deseja gerar novas questões? As questões atuais serão substituídas.")) {
-            setIsGenerating(true);
-            await onGenerateQuiz();
-            setIsGenerating(false);
-        }
-    };
+.loader {
+  border: 4px solid var(--border-color);
+  border-top: 4px solid var(--primary-accent);
+  border-radius: 50%;
+  width: 50px; /* Aumenta um pouco o tamanho para a tela cheia */
+  height: 50px;
+  animation: spin 1s linear infinite;
+}
 
-    const handleGenerateFlashcards = async () => {
-        if (window.confirm("Tem certeza que deseja gerar novos flashcards? Os flashcards atuais serão substituídos.")) {
-            setIsGenerating(true);
-            await onGenerateFlashcards();
-            setIsGenerating(false);
-        }
-    }
+.loading-overlay p {
+    font-size: 1.1rem;
+    color: var(--text-color);
+    opacity: 0.8;
+}
 
-    const availableTabs = [
-        { id: 'summary', label: 'Resumo', condition: true },
-        { id: 'video', label: 'Vídeo', condition: !!summary.video },
-        { id: 'flashcards', label: 'Flashcards', condition: (summary.flashcards?.length > 0) || isAdminOrAmbassador },
-        { id: 'questions', label: 'Questões', condition: (summary.questions?.length > 0) || isAdminOrAmbassador }
-    ].filter(tab => tab.condition);
+.spinner-sm {
+    width: 16px;
+    height: 16px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    display: inline-block;
+    animation: spin .75s linear infinite;
+}
 
-    return (
-        <div className="summary-detail-layout">
-            {activeTab === 'summary' && isTocVisible && <TableOfContents content={summary.content} />}
-            <div className="summary-detail-view">
-                <div className="summary-header">
-                    {activeTab === 'summary' && (
-                        <IconButton onClick={() => setIsTocVisible(!isTocVisible)} className="toc-toggle-btn">
-                            <ListIcon />
-                        </IconButton>
-                    )}
-                    <h1 className="summary-detail-title">{summary.title}</h1>
-                    <div className="summary-detail-actions">
-                        <button className="btn btn-secondary" onClick={onToggleComplete}>
-                            {isCompleted ? <CheckCircleIcon /> : null}
-                            {isCompleted ? 'Concluído' : 'Marcar como Concluído'}
-                        </button>
-                        {isAdminOrAmbassador && (
-                            <>
-                                <button className="btn btn-secondary" onClick={onAIUpdate}><SparklesIcon />Atualizar com IA</button>
-                                <IconButton onClick={onEdit}><EditIcon/></IconButton>
-                                <IconButton onClick={onDelete}><DeleteIcon/></IconButton>
-                            </>
-                        )}
-                    </div>
-                </div>
+/* ==========================================================================
+   --- REGRAS DE RESPONSIVIDADE ---
+   Estilos aplicados quando a tela for menor que 768px (tablets e celulares)
+   ========================================================================== */
 
-                <nav className="tabs-nav">
-                    {availableTabs.map(tab => (
-                        <button
-                            key={tab.id}
-                            className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
-                            onClick={() => setActiveTab(tab.id)}
-                            aria-controls={`tab-panel-${tab.id}`}
-                            role="tab"
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </nav>
+@media (max-width: 768px) {
 
-                <div className="tab-content">
-                    <div
-                        id="tab-panel-summary"
-                        role="tabpanel"
-                        className={`summary-content ${activeTab === 'summary' ? '' : 'hidden'}`}
-                        style={{ '--subject-color': subject?.color || '#6c757d' }}
-                    >
-                        <ProtectedContent>
-                            <div dangerouslySetInnerHTML={{ __html: summary.content }} />
-                        </ProtectedContent>
-                    </div>
-
-                    <div id="tab-panel-video" role="tabpanel" className={activeTab === 'video' ? '' : 'hidden'}>
-                        {summary.video && <GoogleDrivePlayer url={summary.video} />}
-                    </div>
-
-                    <div id="tab-panel-flashcards" role="tabpanel" className={activeTab === 'flashcards' ? '' : 'hidden'}>
-                        <ProtectedContent>
-                            {(summary.flashcards?.length > 0) ? (
-                                <>
-                                    <FlashcardView flashcards={summary.flashcards} summaryId={summary.id} />
-                                    {isAdminOrAmbassador && (
-                                        <div className="update-content-container">
-                                             <button className="btn btn-secondary" onClick={handleGenerateFlashcards} disabled={isGenerating}>
-                                                {isGenerating ? 'Atualizando...' : 'Atualizar Flashcards'}
-                                            </button>
-                                        </div>
-                                    )}
-                                </>
-                            ) : (
-                                isAdminOrAmbassador && (
-                                    <div className="quiz-container empty-quiz">
-                                        <p>Ainda não há flashcards para este resumo.</p>
-                                        <button className="btn btn-primary" onClick={handleGenerateFlashcards} disabled={isGenerating}>
-                                            {isGenerating ? 'Gerando Flashcards...' : 'Gerar Flashcards com IA'}
-                                        </button>
-                                    </div>
-                                )
-                            )}
-                        </ProtectedContent>
-                    </div>
-
-                    <div id="tab-panel-questions" role="tabpanel" className={activeTab === 'questions' ? '' : 'hidden'}>
-                        <ProtectedContent>
-                            {summary.questions?.length > 0 ? (
-                                 <>
-                                    <QuizView questions={summary.questions} onGetExplanation={onGetExplanation} />
-                                    {isAdminOrAmbassador && (
-                                        <div className="update-content-container">
-                                            <button className="btn btn-secondary" onClick={handleGenerateQuiz} disabled={isGenerating}>
-                                                {isGenerating ? 'Atualizando...' : 'Atualizar Questões'}
-                                            </button>
-                                        </div>
-                                    )}
-                                </>
-                            ) : (
-                                isAdminOrAmbassador && (
-                                    <div className="quiz-container empty-quiz">
-                                        <p>Ainda não há questões para este resumo.</p>
-                                        <button className="btn btn-primary" onClick={handleGenerateQuiz} disabled={isGenerating}>
-                                            {isGenerating ? 'Gerando Quiz...' : 'Gerar Quiz com IA'}
-                                        </button>
-                                    </div>
-                                )
-                            )}
-                        </ProtectedContent>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const TermSelector = ({ user, terms, onTermUpdate }) => {
-    const [selectedTerm, setSelectedTerm] = useState('');
-    const [loading, setLoading] = useState(false);
-
-    const handleSave = async () => {
-        if (!selectedTerm) {
-            alert("Por favor, selecione um termo.");
-            return;
-        }
-        setLoading(true);
-        await onTermUpdate(selectedTerm);
-        setLoading(false);
-    };
-
-    return (
-        <div className="login-screen">
-            <div className="login-card">
-                <h1>Bem-vindo(a)!</h1>
-                <p>Para começar, selecione o seu período atual.</p>
-                <div className="form-group">
-                    <label htmlFor="term-select">Seu Período</label>
-                    <select
-                        id="term-select"
-                        className="select-input"
-                        value={selectedTerm}
-                        onChange={(e) => setSelectedTerm(e.target.value)}
-                    >
-                        <option value="" disabled>Selecione...</option>
-                        {terms.map(term => (
-                            <option key={term.id} value={term.id}>{term.name}</option>
-                        ))}
-                    </select>
-                </div>
-                <button onClick={handleSave} className="btn btn-primary" disabled={loading}>
-                    {loading ? "Salvando..." : "Salvar e Continuar"}
-                </button>
-            </div>
-        </div>
-    );
-};
-
-// --- TELAS DE STATUS DO USUÁRIO ---
-const PendingApprovalScreen = () => (
-    <div className="login-screen">
-        <div className="login-card">
-            <h1>Med<span>flix</span></h1>
-            <h2>Aguardando Liberação</h2>
-            <p style={{ textAlign: 'center', lineHeight: '1.6' }}>
-                Seu cadastro foi recebido. Para concluir e liberar seu acesso, entre em contato pelo WhatsApp com o número abaixo e envie seu comprovante de pagamento.
-            </p>
-            <div className="contact-info">
-                <strong>(14) 99872-9882</strong>
-            </div>
-            <a
-                href="https://wa.me/5514998729882"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-primary"
-                style={{marginTop: '1.5rem', width: '100%', textDecoration: 'none'}}
-            >
-                Contatar Suporte via WhatsApp
-            </a>
-            <button className="btn btn-secondary" onClick={() => supabase.auth.signOut()} style={{marginTop: '0.5rem', width: '100%'}}>
-                Sair
-            </button>
-        </div>
-    </div>
-);
-
-const BlockedScreen = () => (
-    <div className="login-screen">
-        <div className="login-card">
-            <h1>Med<span>flix</span></h1>
-            <h2>Acesso Bloqueado</h2>
-            <p>Sua conta foi bloqueada. Por favor, entre em contato com o suporte para mais informações.</p>
-            <button className="btn btn-secondary" onClick={() => supabase.auth.signOut()} style={{marginTop: '1rem', width: '100%'}}>
-                Sair
-            </button>
-        </div>
-    </div>
-);
-
-// --- COMPONENTE DE PROTEÇÃO DE CONTEÚDO ---
-const ProtectedContent = ({ children }) => {
-  const preventActions = (e) => e.preventDefault();
-  const wrapperRef = useRef(null);
-
-  useEffect(() => {
-    const element = wrapperRef.current;
-    if (element) {
-      element.addEventListener('contextmenu', preventActions);
-      element.addEventListener('copy', preventActions);
-      element.addEventListener('selectstart', preventActions);
-    }
-    return () => {
-      if (element) {
-        element.removeEventListener('contextmenu', preventActions);
-        element.removeEventListener('copy', preventActions);
-        element.removeEventListener('selectstart', preventActions);
-      }
-    };
-  }, []);
-
-  return <div ref={wrapperRef}>{children}</div>;
-};
-
-
-// --- COMPONENTE PRINCIPAL APP ---
-const App = () => {
-  // States de UI e Autenticação
-  const [session, setSession] = useState(null);
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [terms, setTerms] = useState([]);
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
-  const [view, setView] = useState('dashboard');
-  const [currentSubjectId, setCurrentSubjectId] = useState(null);
-  const [currentSummaryId, setCurrentSummaryId] = useState(null);
-
-  // States de Dados
-  const [subjects, setSubjects] = useState([]);
-  const [summaries, setSummaries] = useState([]);
-  const [completedSummaries, setCompletedSummaries] = useState([]);
-  const [lastViewed, setLastViewed] = useState([]);
-
-  // States de Modais, Loading e Filtros
-  const [isSubjectModalOpen, setSubjectModalOpen] = useState(false);
-  const [isSummaryModalOpen, setSummaryModalOpen] = useState(false);
-  const [isAISplitterModalOpen, setAISplitterModalOpen] = useState(false);
-  const [isAIUpdateModalOpen, setAIUpdateModalOpen] = useState(false);
-  const [editingSubject, setEditingSubject] = useState(null);
-  const [editingSummary, setEditingSummary] = useState(null);
-  const [isBatchLoading, setIsBatchLoading] = useState(false);
-  const [batchLoadingMessage, setBatchLoadingMessage] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTermForAdmin, setSelectedTermForAdmin] = useState(null);
-
-
-  const fetchUserProgress = async (userId) => {
-    const { data, error } = await supabase.from('user_summary_progress').select('summary_id').eq('user_id', userId);
-    if (error) console.error("Erro ao buscar progresso do usuário:", error);
-    else setCompletedSummaries(data.map(item => item.summary_id));
-  };
-
-  useEffect(() => {
-    const checkUserSession = async () => {
-      setLoading(true);
-      try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        setSession(currentSession);
-
-        if (currentSession?.user) {
-            const { data: profileData } = await supabase.from('profiles').select('*').eq('id', currentSession.user.id).single();
-            const fullUser = { ...currentSession.user, ...profileData };
-            setUser(fullUser);
-
-            if (fullUser.status === 'active') {
-                await fetchUserProgress(currentSession.user.id);
-                if (fullUser.role === 'admin') {
-                    await fetchAppData(null, 'admin');
-                } else if (fullUser.term_id) {
-                    await fetchAppData(fullUser.term_id, fullUser.role);
-                }
-            }
-        } else {
-            setUser(null);
-            setSubjects([]);
-            setSummaries([]);
-            setCompletedSummaries([]);
-        }
-      } catch (error) {
-        console.error("Erro ao verificar sessão:", error);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkUserSession();
-
-    const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange((_event, session) => {
-        checkUserSession();
-    });
-
-    const fetchTerms = async () => {
-        const { data } = await supabase.from('terms').select('*').order('id');
-        setTerms(data || []);
-    };
-    fetchTerms();
-
-    return () => authListener.unsubscribe();
-  }, []);
-
-
-  const fetchAppData = async (termId, userRole) => {
-    let subjectsQuery = supabase.from('subjects').select('*');
-
-    if (userRole !== 'admin') {
-      subjectsQuery = subjectsQuery.eq('term_id', termId);
-    }
-
-    const { data: subjectsData, error: subjectsError } = await subjectsQuery;
-    if (subjectsError) console.error("Erro ao buscar disciplinas:", subjectsError);
-    setSubjects(subjectsData || []);
-
-    const { data: summariesData, error: summariesError } = await supabase.from('summaries').select('*').order('position', { ascending: true });
-    if (summariesError) console.error("Erro ao buscar resumos:", summariesError);
-
-    const parseJsonField = (field, fallback = []) => {
-        if (typeof field === 'string') { try { const parsed = JSON.parse(field); return Array.isArray(parsed) ? parsed : fallback; } catch (e) { return fallback; } }
-        return Array.isArray(field) ? field : fallback;
-    };
-    setSummaries((summariesData || []).map(s => ({ ...s, questions: parseJsonField(s.questions), flashcards: parseJsonField(s.flashcards) })));
+  /* 1. Ajustes Gerais de Espaçamento */
+  .container, .main-header {
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 
-  useEffect(() => {
-    document.body.className = theme === 'light' ? 'light-mode' : '';
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+  /* 2. Tela de Login */
+  .login-card {
+    padding: 2rem;
+    margin: 0 1rem; /* Evita que o card toque as bordas */
+  }
 
-  useEffect(() => {
-    if (user) {
-      const savedLastViewed = localStorage.getItem(`lastViewed_${user.id}`);
-      if(savedLastViewed) setLastViewed(JSON.parse(savedLastViewed));
+  /* 3. Dashboard */
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+
+  .dashboard-header h1 {
+    font-size: 2rem;
+  }
+
+  .subject-grid {
+    /* Força a grade a ter apenas uma coluna */
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  /* 4. Lista de Resumos */
+  .summary-list-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  /* 5. Página de Detalhes do Resumo (A MUDANÇA MAIS IMPORTANTE) */
+  .summary-detail-layout {
+    /* Muda o layout de lado a lado para empilhado */
+    flex-direction: column;
+  }
+
+  .toc-container {
+    /* Esconde a Tabela de Conteúdos em telas pequenas */
+    display: none;
+  }
+
+  .summary-detail-title {
+    font-size: 1.8rem;
+  }
+
+  .summary-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .summary-detail-actions {
+    width: 100%;
+    justify-content: flex-start; /* Alinha os botões à esquerda */
+  }
+
+  /* Permite que as abas quebrem a linha se não couberem */
+  .tabs-nav {
+    flex-wrap: wrap;
+  }
+
+  .tab-content {
+    padding: 1.5rem;
+  }
+}
+
+
+/* ==========================================================================
+   Ajustes finos para celulares bem pequenos (largura menor que 480px)
+   ========================================================================== */
+
+@media (max-width: 480px) {
+  .header-actions {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    gap: 0.75rem;
+  }
+
+  .modal-content {
+    padding: 1.5rem;
+  }
+
+  .modal-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .modal-actions > div {
+    display: flex;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .modal-actions .btn {
+    flex-grow: 1; /* Faz os botões do modal ocuparem o espaço */
+  }
+}
+/* ==========================================================================
+   REGRAS DE RESPONSIVIDADE PARA CELULAR (Mobile First Adjustments)
+   ========================================================================== */
+
+/* Aplica estas regras para telas com largura máxima de 768px (tablets e celulares) */
+@media (max-width: 768px) {
+
+  /* --- GERAL & LAYOUT --- */
+
+  /* Reduz o padding geral dos contêineres para dar mais espaço ao conteúdo */
+  .container {
+    padding: 1rem;
+  }
+
+  /* Faz o cabeçalho principal quebrar a linha se ficar apertado */
+  .main-header {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 0.75rem 1rem;
+  }
+
+  /* --- TELA DE LOGIN --- */
+
+  /* Faz o card de login ocupar quase toda a largura da tela, com margens pequenas */
+  .login-card {
+    width: 95%;
+    padding: 1.5rem;
+  }
+
+  /* --- DASHBOARD --- */
+
+  /* Alinha os itens do cabeçalho do dashboard verticalmente e no centro */
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .dashboard-header .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* Transforma as grades em uma única coluna vertical */
+  .subject-grid,
+  .last-viewed-grid {
+    grid-template-columns: 1fr; /* Apenas uma coluna */
+    gap: 1rem;
+  }
+
+  /* --- TELA DE DETALHES DO RESUMO (IMPORTANTE!) --- */
+
+  .summary-detail-layout {
+    grid-template-columns: 1fr; /* Remove a coluna lateral */
+  }
+
+  /* Esconde completamente o Índice (Table of Contents) em telas pequenas */
+  .toc-container {
+    display: none;
+  }
+
+  /* O cabeçalho do resumo agora quebra a linha para os botões */
+  .summary-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .summary-detail-actions {
+    flex-wrap: wrap; /* Permite que os botões quebrem a linha */
+    gap: 0.5rem;
+  }
+
+  /* Permite que a barra de abas role horizontalmente se não couber na tela */
+  .tabs-nav {
+    overflow-x: auto;
+    padding-bottom: 10px; /* Espaço para a barra de rolagem não ficar colada */
+    white-space: nowrap; /* Impede que os botões das abas quebrem a linha */
+  }
+
+  /* --- MODAIS (Pop-ups) --- */
+
+  /* Faz os modais ocuparem mais da tela e garante a rolagem vertical */
+  .modal-content, .modal-content.large {
+    width: 95vw; /* 95% da largura da tela */
+    max-height: 85vh; /* 85% da altura da tela */
+    padding: 1.5rem 1rem;
+  }
+  .modal-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  /* --- AJUSTES DE FONTE E BOTÕES --- */
+
+  /* Reduz o tamanho das fontes de títulos para não serem tão grandes no celular */
+  h1, .summary-detail-title {
+    font-size: 1.8rem;
+  }
+  h2 {
+    font-size: 1.5rem;
+  }
+  h3 {
+    font-size: 1.2rem;
+  }
+
+  /* Garante que os botões tenham um tamanho bom para o toque */
+  .btn {
+    padding: 0.6rem 1rem;
+  }
+}
+
+/* ==========================================================================
+   CORREÇÃO DO LAYOUT DE ROLAGEM HORIZONTAL E VERTICAL DO RESUMO
+   ========================================================================== */
+
+/*
+  1. Esta é a regra principal. Adicionamos 'overflow-x: auto'
+  para que uma barra de rolagem horizontal apareça SOMENTE se o
+  conteúdo for mais largo que a área.
+*/
+.tab-content {
+  flex-grow: 1;
+  overflow-y: auto;  /* Rolagem vertical (você já tem isso) */
+  overflow-x: auto;  /* Rolagem horizontal (ADICIONE ISTO) */
+  padding: 1.5rem;
+}
+
+/*
+  2. Regras de segurança para o conteúdo DENTRO do resumo.
+  Isso ajuda a prevenir o overflow antes mesmo que ele aconteça.
+*/
+.summary-content {
+  /* Garante que o conteúdo respeite a largura máxima antes de forçar a rolagem */
+  max-width: 100%;
+
+  /* Força a quebra de palavras/URLs muito longas para que não estourem o layout */
+  overflow-wrap: break-word;
+  word-wrap: break-word; /* Suporte para navegadores mais antigos */
+  word-break: break-word;
+}
+
+/*
+  3. Garante que imagens nunca sejam maiores que seu contêiner.
+  Essencial para a responsividade.
+*/
+.summary-content img {
+  max-width: 100%;
+  height: auto; /* Mantém a proporção da imagem */
+  display: block;
+}
+
+/*
+  4. Garante que blocos de código (`<pre>`) sejam roláveis
+  internamente se tiverem linhas muito compridas.
+*/
+.summary-content pre {
+  overflow-x: auto;
+  background-color: var(--card-bg); /* Um fundo para destacar */
+  padding: 1rem;
+  border-radius: 8px;
+  white-space: pre; /* Mantém a formatação do código */
+}
+/* ==========================================================================
+   ESTILOS DA BARRA LATERAL (SIDEBAR) RESPONSIVA
+   ========================================================================== */
+
+/* --- O Botão "Hamburger" --- */
+.hamburger-btn {
+  display: none; /* Escondido por padrão no desktop */
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  cursor: pointer;
+  z-index: 1001; /* Fica acima de outros elementos do header */
+}
+.hamburger-btn svg {
+  stroke: var(--text-color);
+}
+
+/* --- A Sobreposição (Overlay) --- */
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1002;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+}
+.sidebar-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* --- A Barra Lateral (Sidebar) --- */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 300px; /* Largura da barra lateral */
+  max-width: 85%;
+  background-color: var(--card-bg);
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 1003;
+  transform: translateX(-100%); /* Começa escondida fora da tela */
+  transition: transform 0.3s ease-in-out;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar.open {
+  transform: translateX(0); /* Move para dentro da tela quando aberta */
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.sidebar-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.sidebar-header .close-btn {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  font-weight: 300;
+  color: var(--text-color);
+  cursor: pointer;
+  padding: 0 0.5rem;
+}
+
+.sidebar-content {
+  flex-grow: 1;
+  overflow-y: auto; /* Permite rolar o conteúdo da sidebar se for muito grande */
+  padding: 1rem;
+}
+
+/* ==========================================================================
+   REGRAS DE RESPONSIVIDADE PARA ATIVAR A SIDEBAR NO CELULAR
+   ========================================================================== */
+
+/* --- CÓDIGO CORRETO E COMPLETO PARA A TELA DO CELULAR --- */
+
+/* Media Query para telas de celular e tablets (até 768px de largura) */
+@media (max-width: 768px) {
+
+  /* 1. Transforma a grade em uma única coluna para que as matérias apareçam */
+  .subject-grid {
+    grid-template-columns: 1fr; /* Apenas uma coluna */
+  }
+
+  /* 2. Ajusta o cabeçalho para telas pequenas */
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .dashboard-header .header-actions {
+    width: 100%;
+    justify-content: flex-end; /* Alinha os botões à direita */
+  }
+
+  /* 3. Centraliza o botão "Adicionar Disciplina" */
+  .add-subject-button-container {
+    justify-content: center;
+  }
+}
+
+/*
+ * CSS para o Cabeçalho da Tela de Detalhes do Resumo
+ */
+
+/* 1. Transforma o cabeçalho em um container flexível */
+.summary-header {
+  display: flex;
+  align-items: center; /* Alinha verticalmente o ícone, título e botões */
+  width: 100%;
+  margin-bottom: 1.5rem; /* Mantém um espaço abaixo do cabeçalho */
+}
+
+/* 2. Estiliza o novo botão de toggle do sumário */
+.toc-toggle-btn {
+  /* Adiciona um espaço à direita do ícone para não ficar colado no título */
+  margin-right: 1rem;
+}
+
+/* Garante que o título do resumo ocupe o espaço necessário */
+.summary-detail-title {
+  margin-right: 1rem; /* Adiciona margem para o caso de o título ser muito longo */
+}
+
+/* 3. Empurra o container de ações (editar, apagar, etc.) para a extrema direita */
+.summary-detail-actions {
+  margin-left: auto; /* Esta é a "mágica" que empurra tudo para a direita */
+  display: flex; /* Alinha os botões de ação entre si */
+  gap: 0.5rem; /* Adiciona um pequeno espaço entre os botões de ação */
+}
+
+/* * BÔNUS: Estilos básicos para todos os .icon-btn para garantir uma boa aparência
+ * Caso você ainda não os tenha.
+*/
+.icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%; /* Deixa o fundo redondo no hover */
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.icon-btn:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-primary);
+}
+
+/* Lista de alternativas */
+.quiz-question ul {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.quiz-question li {
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+/* Hover antes de escolher */
+.quiz-question li:hover {
+  background: var(--hover-color, #f5f5f5);
+  transform: scale(1.02);
+}
+
+/* Alternativa selecionada pelo usuário */
+.quiz-question li.selected {
+  border: 2px solid #007bff;
+  background: #eaf2ff;
+}
+
+/* Resposta correta */
+.quiz-question li.correct {
+  border: 2px solid #28a745;
+  background: #e6f9ec;
+  color: #155724;
+  font-weight: bold;
+}
+
+/* Resposta incorreta */
+.quiz-question li.incorrect {
+  border: 2px solid #dc3545;
+  background: #fdeaea;
+  color: #721c24;
+  font-weight: bold;
+}
+
+/* Feedback abaixo da questão */
+.feedback {
+  margin-top: 1rem;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+.feedback .correct {
+  color: #28a745;
+  font-weight: bold;
+}
+
+.feedback .incorrect {
+  color: #dc3545;
+  font-weight: bold;
+}
+.hidden {
+  display: none;
+}
+
+/* --- ESTILO BASE PARA A GRADE DE DISCIPLINAS --- */
+/* (Você provavelmente já tem isso, mas garanta que exista) */
+.subject-grid {
+  display: grid;
+  /* Define 3 colunas para telas maiores */
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+
+/* --- CSS PARA TORNAR A PÁGINA RESPONSIVA --- */
+
+/* Media Query para telas de celular e tablets (até 768px de largura) */
+@media (max-width: 768px) {
+
+  /* 1. Transforma a grade em uma única coluna */
+  .subject-grid {
+    grid-template-columns: 1fr; /* Apenas uma coluna */
+  }
+
+  /* 2. Ajusta o cabeçalho para telas pequenas */
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .dashboard-header .header-actions {
+    width: 100%;
+    justify-content: flex-end; /* Alinha os botões à direita */
+  }
+
+  /* 3. Centraliza o botão "Adicionar Disciplina" */
+  .add-subject-button-container {
+    justify-content: center;
+  }
+}
+
+/* --- ESTILOS PARA A NOVA FUNCIONALIDADE DE FLASHCARDS (VERSÃO COMPLETA E CORRIGIDA) --- */
+
+.flashcard-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center; /* Centraliza todo o bloco verticalmente */
+  padding: 2rem 1rem;
+  gap: 2.5rem; /* Espaçamento entre o card e os botões */
+}
+
+.flashcard-progress {
+  font-size: 1rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Container que define a perspectiva 3D */
+.flashcard {
+  width: 100%;
+  max-width: 550px;
+  height: 300px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  perspective: 1200px;
+  flex-shrink: 0;
+}
+
+/* Elemento interno que executa a animação de virar */
+.flashcard-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.6s;
+  transform-style: preserve-3d; /* CORRIGIDO: Garante o 3D correto */
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.flashcard.is-flipped .flashcard-inner {
+  transform: rotateY(180deg);
+}
+
+/* Estilo comum para a frente e o verso */
+.flashcard-front,
+.flashcard-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  border-radius: 16px;
+  text-align: center;
+  line-height: 1.5;
+  font-weight: 500;
+  overflow: auto;
+}
+
+/* Frente do Card */
+.flashcard-front {
+  background-color: var(--surface-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  font-size: 1.4rem;
+}
+
+/* Verso do Card */
+.flashcard-back {
+  background: linear-gradient(45deg, #007BFF, #0056b3);
+  color: #ffffff;
+  transform: rotateY(180deg);
+  font-size: 1.2rem;
+  font-weight: 400;
+}
+
+/* Botões de Ação */
+.flashcard-actions {
+  display: flex;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 550px;
+  justify-content: center;
+  padding-bottom: 1rem;
+}
+
+.btn-action-dont-know,
+.btn-action-know {
+  flex-basis: 200px;
+  padding: 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  transition: all 0.2s ease-in-out;
+}
+.btn-action-dont-know:hover,
+.btn-action-know:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+
+.btn-action-dont-know {
+  background-color: #ff4d4d;
+  color: white;
+}
+
+.btn-action-know {
+  background-color: #28a745;
+  color: white;
+}
+
+/* Tela de Conclusão */
+.finished-deck {
+  justify-content: center;
+  text-align: center;
+}
+
+/* ==========================================================================
+   ESTILOS DO CHATBOT
+   ========================================================================== */
+
+/* --- Variáveis do Chatbot --- */
+:root {
+    --chatbot-primary-color: #007aff;
+    --chatbot-primary-text-color: #ffffff;
+    --chatbot-bubble-ai-bg: #262626; /* Cor da bolha da IA no modo escuro */
+}
+
+body.light-mode {
+    --chatbot-bubble-ai-bg: #e5e5ea; /* Cor da bolha da IA no modo claro */
+}
+
+
+/* --- Botão Flutuante (Minimizado) --- */
+.chatbot-fab {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    background-color: var(--chatbot-primary-color);
+    color: var(--chatbot-primary-text-color);
+    border-radius: 50px;
+    border: none;
+    padding: 14px 22px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    z-index: 1000;
+}
+
+.chatbot-fab:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+}
+
+.chatbot-fab svg {
+    width: 24px;
+    height: 24px;
+}
+
+
+/* --- Janela do Chat (Maximizado) --- */
+.chatbot-widget {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    width: 420px;
+    max-width: 90vw;
+    height: 65vh;
+    max-height: 700px;
+    background-color: var(--card-color); /* Adapta-se ao tema */
+    border: 1px solid var(--border-color); /* Adapta-se ao tema */
+    border-radius: 18px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 1000;
+    transform-origin: bottom right;
+    animation: scale-up 0.3s ease-out;
+}
+
+@keyframes scale-up {
+    from {
+        transform: scale(0.5);
+        opacity: 0;
     }
-  }, [user]);
-
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem(`lastViewed_${user.id}`, JSON.stringify(lastViewed));
+    to {
+        transform: scale(1);
+        opacity: 1;
     }
-  }, [lastViewed, user]);
+}
 
-  const handleLogout = () => supabase.auth.signOut();
-  const handleSelectSubject = (subject) => { setCurrentSubjectId(subject.id); setView('subject'); };
-  const handleSelectSummary = (summary) => {
-    setCurrentSummaryId(summary.id);
-    setView('summary');
-    setLastViewed(prev => {
-        const otherSummaries = prev.filter(s => s.id !== summary.id);
-        const subjectName = subjects.find(s => s.id === summary.subject_id)?.name || '';
-        return [{...summary, subjectName}, ...otherSummaries].slice(0, 3);
-    });
-  };
+.chatbot-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    background-color: var(--chatbot-primary-color); /* Sempre azul */
+    color: var(--chatbot-primary-text-color);
+    flex-shrink: 0;
+}
 
-  const handleBackToDashboard = () => { setView('dashboard'); setCurrentSubjectId(null); setCurrentSummaryId(null); }
-  const handleBackToSubject = () => { setCurrentSummaryId(null); setView('subject'); };
+.chatbot-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
 
-  const handleTermUpdate = async (newTermId) => {
-      const { data, error } = await supabase.from('profiles').update({ term_id: newTermId }).eq('id', user.id).select().single();
-      if (error) { alert("Erro ao salvar o termo."); }
-      else if (data) {
-          const updatedUser = { ...user, ...data };
-          setUser(updatedUser);
-          fetchAppData(newTermId, updatedUser.role);
-      }
-  };
-
-  const handleSaveSubject = async (subjectData) => {
-    if (!subjectData.term_id) { alert("O período da disciplina não foi especificado."); return; }
-    if (subjectData.id) {
-        const { data, error } = await supabase.from('subjects').update({ name: subjectData.name, color: subjectData.color, term_id: subjectData.term_id }).eq('id', subjectData.id).select().single();
-        if (error) alert(error.message);
-        else if (data) setSubjects(subjects.map(s => s.id === data.id ? data : s));
-    } else {
-        const { data, error } = await supabase.from('subjects').insert({ name: subjectData.name, color: subjectData.color, user_id: session.user.id, term_id: subjectData.term_id }).select().single();
-        if (error) alert(error.message);
-        else if (data) setSubjects([...subjects, data]);
-    }
-    setSubjectModalOpen(false);
-    setEditingSubject(null);
-  };
-
-  const handleDeleteSubject = async (subjectId) => {
-    if (window.confirm("Tem certeza que deseja excluir esta disciplina e todos os seus resumos?")) {
-        await supabase.from('summaries').delete().eq('subject_id', subjectId);
-        const { error } = await supabase.from('subjects').delete().eq('id', subjectId);
-        if (error) alert(error.message);
-        else {
-          setSubjects(subjects.filter(s => s.id !== subjectId));
-          setSummaries(summaries.filter(s => s.subject_id !== subjectId));
-        }
-    }
-  };
-
-  const handleSaveSummary = async (summaryData) => {
-    const isNew = !summaryData.id;
-    const position = isNew ? summaries.filter(s => s.subject_id === summaryData.subject_id).length : summaryData.position;
-    const payload = { ...summaryData, user_id: session.user.id, position };
-
-    if (isNew) {
-        const { data, error } = await supabase.from('summaries').insert(payload).select().single();
-        if (error) alert(error.message);
-        else if (data) setSummaries([...summaries, data]);
-    } else {
-        const { data, error } = await supabase.from('summaries').update(payload).eq('id', summaryData.id).select().single();
-        if (error) alert(error.message);
-        else if (data) setSummaries(summaries.map(s => s.id === data.id ? data : s));
-    }
-    setSummaryModalOpen(false);
-    setEditingSummary(null);
-  };
-
-  const handleDeleteSummary = async (summaryId) => {
-      if (window.confirm("Tem certeza que deseja excluir este resumo?")) {
-          const { error } = await supabase.from('summaries').delete().eq('id', summaryId);
-          if (error) alert(error.message);
-          else { setSummaries(summaries.filter(s => s.id !== summaryId)); handleBackToSubject(); }
-      }
-  };
-
-  const handleSplitAndSaveSummaries = async (newSummaries) => {
-    if (!currentSubjectId) { alert("Nenhuma disciplina selecionada."); setAISplitterModalOpen(false); return; }
-    const startPosition = summaries.filter(s => s.subject_id === currentSubjectId).length;
-    const summariesPayload = newSummaries.map((s, i) => ({ ...s, subject_id: currentSubjectId, user_id: session.user.id, position: startPosition + i }));
-    const { data, error } = await supabase.from('summaries').insert(summariesPayload).select();
-    if (error) { alert("Falha ao salvar os novos resumos."); console.error(error); }
-    else if (data) { setSummaries(prev => [...prev, ...data]); alert(`${data.length} resumos criados!`); }
-    setAISplitterModalOpen(false);
-  };
-
-  const handleUpdateSummaryContent = async (summaryId, newContent) => {
-      const { data, error } = await supabase.from('summaries').update({ content: newContent }).eq('id', summaryId).select().single();
-      if (error) alert(error.message);
-      else if (data) setSummaries(summaries.map(s => s.id === data.id ? data : s));
-      setAIUpdateModalOpen(false);
-  };
-
-  const handleReorderSummaries = async (startIndex, endIndex) => {
-    const subjectSummaries = summaries.filter(s => s.subject_id === currentSubjectId).sort((a, b) => a.position - b.position);
-    const [removed] = subjectSummaries.splice(startIndex, 1);
-    subjectSummaries.splice(endIndex, 0, removed);
-    const updatedSummaries = subjectSummaries.map((s, index) => ({ ...s, position: index }));
-    setSummaries(prev => [...prev.filter(s => s.subject_id !== currentSubjectId), ...updatedSummaries]);
-    const updates = updatedSummaries.map(s => supabase.from('summaries').update({ position: s.position }).eq('id', s.id));
-    const { error } = await Promise.all(updates);
-    if (error) alert("Não foi possível salvar a nova ordem.");
-  };
-
-  const handleGenerateQuiz = async () => {
-    const summary = summaries.find(s => s.id === currentSummaryId);
-    if (!summary) return;
-    try {
-        const prompt = `Você é um especialista em criar questões para provas de residência médica. Baseado estritamente no conteúdo do resumo a seguir, crie uma lista de no mínimo 10 questões de múltipla escolha de alto nível. As questões devem ser complexas, mesclando diferentes formatos (ex: caso clínico curto, "qual das seguintes NÃO é", etc.). Cada questão deve ter 4 alternativas plausíveis, mas apenas uma correta. Forneça também um comentário explicativo para a resposta correta, justificando-a com base no texto do resumo. Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`;
-        const parsedJson = await generateAIContentWithRetry(prompt, quizSchema);
-        const { data, error } = await supabase.from('summaries').update({ questions: parsedJson.questions }).eq('id', currentSummaryId).select().single();
-        if (error) throw error;
-        setSummaries(summaries.map(s => s.id === currentSummaryId ? data : s));
-    } catch (e) { console.error("Erro ao gerar/salvar quiz:", e); alert("Falha ao gerar o quiz."); }
-  };
-
-  const handleGenerateFlashcards = async () => {
-    const summary = summaries.find(s => s.id === currentSummaryId);
-    if (!summary) return;
-    try {
-        const prompt = `Baseado no resumo sobre "${summary.title}", crie flashcards para estudo. Formato pergunta-e-resposta (frente e verso). Priorize conceitos-chave, definições, mecanismos, causas, consequências, classificações e relações clínicas. EVITE valores numéricos específicos. Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`;
-        const parsedJson = await generateAIContentWithRetry(prompt, flashcardsSchema);
-        const { data, error } = await supabase.from('summaries').update({ flashcards: parsedJson.flashcards }).eq('id', currentSummaryId).select().single();
-        if (error) throw error;
-        setSummaries(summaries.map(s => s.id === currentSummaryId ? data : s));
-    } catch (e) { console.error("Erro ao gerar/salvar flashcards:", e); alert("Falha ao gerar os flashcards."); }
-  };
-
-    const generateForAll = async (contentType) => {
-        const isFlashcards = contentType === 'flashcards';
-        const summariesToProcess = summaries.filter(s => s.subject_id === currentSubjectId && (!s[contentType] || s[contentType].length === 0));
-        if (summariesToProcess.length === 0) { alert(`Não há resumos sem ${contentType} nesta disciplina.`); return; }
-
-        setIsBatchLoading(true);
-        const updatedSummaries = [];
-        try {
-            for (let i = 0; i < summariesToProcess.length; i++) {
-                const summary = summariesToProcess[i];
-                setBatchLoadingMessage(`Gerando ${contentType} para "${summary.title}" (${i + 1}/${summariesToProcess.length})...`);
-                const prompt = isFlashcards ? `Baseado no resumo sobre "${summary.title}", crie flashcards para estudo...` : `Baseado no resumo, crie questões de múltipla escolha...`;
-                const schema = isFlashcards ? flashcardsSchema : quizSchema;
-                const parsedJson = await generateAIContentWithRetry(prompt.replace('...', `Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`), schema);
-                updatedSummaries.push({ id: summary.id, [contentType]: parsedJson[isFlashcards ? 'flashcards' : 'questions'] });
-            }
-            setBatchLoadingMessage("Salvando no banco de dados...");
-            const updatePromises = updatedSummaries.map(s => supabase.from('summaries').update({ [contentType]: s[contentType] }).eq('id', s.id));
-            await Promise.all(updatePromises);
-            setSummaries(prev => prev.map(s => ({ ...s, ...updatedSummaries.find(u => u.id === s.id) })));
-            alert(`${contentType} gerados para ${updatedSummaries.length} resumos!`);
-        } catch (e) { console.error(`Erro na geração em lote de ${contentType}:`, e); alert("Ocorreu um erro durante a geração em lote."); }
-        finally { setIsBatchLoading(false); setBatchLoadingMessage(''); }
-    };
-
-    // NOVO: Lógica centralizada para gerar conteúdo para todos os resumos faltantes
-    const handleGenerateContentForAllMissing = async (contentType) => {
-        const visibleSubjectIds = new Set(subjectsForUser.map(s => s.id));
-        const summariesToProcess = summaries.filter(s =>
-            visibleSubjectIds.has(s.subject_id) &&
-            (!s[contentType] || s[contentType].length === 0)
-        );
-
-        if (summariesToProcess.length === 0) {
-            const contentName = contentType === 'flashcards' ? 'flashcards' : 'questões';
-            alert(`Não há resumos sem ${contentName} para gerar.`);
-            return;
-        }
-
-        const confirm = window.confirm(`Isso irá gerar ${contentType} para ${summariesToProcess.length} resumo(s). Deseja continuar?`);
-        if (!confirm) return;
-
-        setIsBatchLoading(true);
-
-        try {
-            for (const [index, summary] of summariesToProcess.entries()) {
-                const isFlashcards = contentType === 'flashcards';
-                const contentName = isFlashcards ? 'Flashcards' : 'Questões';
-                setBatchLoadingMessage(`Gerando ${contentName} para "${summary.title}" (${index + 1}/${summariesToProcess.length})...`);
-
-                const prompt = isFlashcards
-                    ? `Baseado no resumo sobre "${summary.title}", crie flashcards para estudo. Formato pergunta-e-resposta (frente e verso). Priorize conceitos-chave, definições, mecanismos, causas, consequências, classificações e relações clínicas. EVITE valores numéricos específicos. Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`
-                    : `Você é um especialista em criar questões para provas de residência médica. Baseado estritamente no conteúdo do resumo a seguir, crie uma lista de no mínimo 10 questões de múltipla escolha de alto nível. As questões devem ser complexas, mesclando diferentes formatos (ex: caso clínico curto, "qual das seguintes NÃO é", etc.). Cada questão deve ter 4 alternativas plausíveis, mas apenas uma correta. Forneça também um comentário explicativo para a resposta correta, justificando-a com base no texto do resumo. Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`;
-
-                const schema = isFlashcards ? flashcardsSchema : quizSchema;
-                const parsedJson = await generateAIContentWithRetry(prompt, schema);
-
-                const contentPayload = parsedJson[isFlashcards ? 'flashcards' : 'questions'];
-                const { error } = await supabase.from('summaries').update({ [contentType]: contentPayload }).eq('id', summary.id);
-
-                if (error) {
-                    throw new Error(`Falha ao salvar no resumo "${summary.title}": ${error.message}`);
-                }
-
-                // Atualiza o estado local para a UI refletir a mudança imediatamente
-                setSummaries(prev =>
-                    prev.map(s => s.id === summary.id ? { ...s, [contentType]: contentPayload } : s)
-                );
-            }
-            alert(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} gerados com sucesso para ${summariesToProcess.length} resumo(s)!`);
-        } catch (e) {
-            console.error(`Erro na geração em lote de ${contentType}:`, e);
-            alert(`Ocorreu um erro durante a geração em lote: ${e.message}`);
-        } finally {
-            setIsBatchLoading(false);
-            setBatchLoadingMessage('');
-        }
-    };
-
-    // NOVO: Funções específicas que serão passadas para o Dashboard
-    const handleGenerateFlashcardsForAllSubjects = () => handleGenerateContentForAllMissing('flashcards');
-    const handleGenerateQuizForAllSubjects = () => handleGenerateContentForAllMissing('questions');
+.chatbot-header .icon-btn {
+    background-color: transparent;
+    color: var(--chatbot-primary-text-color);
+}
+.chatbot-header .icon-btn:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
 
 
-   const handleGetExplanation = async (questionText, correctAnswer) => {
-        const summary = summaries.find(s => s.id === currentSummaryId);
-        if (!summary) return "Contexto não encontrado.";
-        const prompt = `Contexto: "${summary.content.replace(/<[^>]*>?/gm, ' ')}". Pergunta: "${questionText}". Resposta correta: "${correctAnswer}". Explique brevemente por que esta é a resposta correta.`;
-        const parsedJson = await generateAIContentWithRetry(prompt, quizExplanationSchema);
-        return parsedJson.explanation;
-    };
+.chatbot-messages {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background-color: var(--background-color); /* Adapta-se ao tema */
+}
 
-    const handleToggleComplete = async () => {
-        if (!user || !currentSummaryId) return;
-        const isCompleted = completedSummaries.includes(currentSummaryId);
-        if (isCompleted) {
-            const { error } = await supabase.from('user_summary_progress').delete().match({ user_id: user.id, summary_id: currentSummaryId });
-            if (!error) setCompletedSummaries(prev => prev.filter(id => id !== currentSummaryId));
-            else alert("Erro ao remover o progresso.");
-        } else {
-            const { error } = await supabase.from('user_summary_progress').insert({ user_id: user.id, summary_id: currentSummaryId });
-            if (!error) setCompletedSummaries(prev => [...prev, currentSummaryId]);
-            else alert("Erro ao salvar o progresso.");
-        }
-    };
+/* --- Bolhas de mensagens --- */
+.message-bubble {
+    padding: 12px 18px;
+    border-radius: 20px;
+    max-width: 85%;
+    word-wrap: break-word;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
 
-  const currentSubject = subjects.find(s => s.id === currentSubjectId);
-  const currentSummary = summaries.find(s => s.id === currentSummaryId);
-  const summariesForCurrentSubject = useMemo(() => summaries.filter(s => s.subject_id === currentSubjectId).sort((a, b) => (a.position ?? 0) - (b.position ?? 0)), [summaries, currentSubjectId]);
+.message-bubble.user {
+    background-color: var(--chatbot-primary-color); /* Sempre azul */
+    color: var(--chatbot-primary-text-color);
+    align-self: flex-end;
+    border-bottom-right-radius: 6px;
+}
 
-  const subjectsForUser = useMemo(() => {
-    if (user?.role === 'admin') {
-      if (selectedTermForAdmin) {
-        return subjects.filter(s => String(s.term_id) === String(selectedTermForAdmin));
-      }
-      return subjects;
-    }
-    return subjects;
-  }, [subjects, user, selectedTermForAdmin]);
+.message-bubble.ai {
+    background-color: var(--chatbot-bubble-ai-bg); /* Adapta-se ao tema */
+    color: var(--text-color); /* Adapta-se ao tema */
+    align-self: flex-start;
+    border-bottom-left-radius: 6px;
+}
 
-  const searchResults = useMemo(() => {
-    const allSummariesWithSubject = summaries.map(sum => ({ ...sum, subjectName: subjects.find(sub => sub.id === sum.subject_id)?.name || '' }));
-    if (!searchQuery.trim()) return { subjects: [], summaries: [], allSummaries: summaries };
-    const q = searchQuery.toLowerCase();
-    return {
-        subjects: subjectsForUser.filter(s => s.name.toLowerCase().includes(q)).map(s => ({ ...s, summaryCount: summaries.filter(sum => sum.subject_id === s.id).length })),
-        summaries: allSummariesWithSubject.filter(s => s.title.toLowerCase().includes(q) && subjectsForUser.some(sub => sub.id === s.subject_id)),
-        allSummaries: summaries
-    };
-  }, [searchQuery, subjectsForUser, summaries, subjects]);
 
-  const lastViewedWithDetails = useMemo(() => lastViewed.map(lv => ({ ...lv, subjectName: subjects.find(s => s.id === lv.subject_id)?.name || '...' })).filter(lv => subjects.some(s => s.id === lv.subject_id)), [lastViewed, subjects]);
+/* --- Área de Input --- */
+.chatbot-input-area {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--border-color);
+    gap: 8px;
+    background-color: var(--card-color); /* Adapta-se ao tema */
+}
 
-    const AdminTermSelector = () => (
-        <div className="admin-term-selector">
-            <label htmlFor="term-selector">Visualizando Período:</label>
-            <select
-                id="term-selector"
-                className="select-input"
-                value={selectedTermForAdmin || ''}
-                onChange={(e) => setSelectedTermForAdmin(e.target.value ? Number(e.target.value) : null)}
-            >
-                <option value="">Todos os Períodos</option>
-                {terms.map(term => <option key={term.id} value={term.id}>{term.name}</option>)}
-            </select>
-        </div>
-    );
+.chatbot-input-area textarea {
+    flex-grow: 1;
+    border: 1px solid var(--border-color);
+    background-color: var(--background-color);
+    color: var(--text-color);
+    resize: none;
+    max-height: 100px;
+    padding: 10px;
+    font-family: inherit;
+    font-size: 1rem;
+    border-radius: 10px;
+}
 
-    const renderContent = () => {
-    if (loading) {
-        return <div className="loader-container"><div className="loader"></div></div>;
-    }
-    if (!session || !user) {
-        return <LoginScreen theme={theme} toggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} />;
-    }
-    if (user.status === 'pending_approval') return <PendingApprovalScreen />;
-    if (user.status === 'blocked') return <BlockedScreen />;
-    if (user.status !== 'active') {
-        return <LoginScreen theme={theme} toggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} />;
-    }
-    if (!user.term_id && user.role !== 'admin') {
-        return <TermSelector user={user} terms={terms} onTermUpdate={handleTermUpdate} />;
-    }
+.chatbot-input-area textarea:focus {
+    outline: none;
+    border-color: var(--primary-accent);
+}
 
-    switch (view) {
-      case 'dashboard':
-        return (
-            <>
-                {user.role === 'admin' && <AdminTermSelector />}
-                {/* ALTERADO: Passando as novas props para o Dashboard */}
-                <Dashboard
-                    user={user}
-                    termName={terms.find(t => t.id === user.term_id)?.name}
-                    onLogout={handleLogout}
-                    subjects={subjectsForUser}
-                    onSelectSubject={handleSelectSubject}
-                    onAddSubject={() => { setEditingSubject(null); setSubjectModalOpen(true); }}
-                    onEditSubject={(s) => { setEditingSubject(s); setSubjectModalOpen(true); }}
-                    onDeleteSubject={handleDeleteSubject}
-                    theme={theme}
-                    toggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
-                    searchQuery={searchQuery}
-                    onSearchChange={(e) => setSearchQuery(e.target.value)}
-                    searchResults={searchResults}
-                    onSelectSummary={handleSelectSummary}
-                    lastViewed={lastViewedWithDetails}
-                    completedSummaries={completedSummaries}
-                    onNavigateToAdmin={() => setView('admin')}
-                    onGenerateFlashcardsForAll={handleGenerateFlashcardsForAllSubjects}
-                    onGenerateQuizForAll={handleGenerateQuizForAllSubjects}
-                    isBatchLoading={isBatchLoading}
-                    batchLoadingMessage={batchLoadingMessage}
-                />
-            </>
-        );
-      case 'subject':
-        return <SummaryListView subject={currentSubject} summaries={summariesForCurrentSubject} onSelectSummary={handleSelectSummary} onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }} onEditSummary={(s) => { setEditingSummary(s); setSummaryModalOpen(true); }} onDeleteSummary={handleDeleteSummary} user={user} completedSummaries={completedSummaries} onAISplit={() => setAISplitterModalOpen(true)} onReorderSummaries={handleReorderSummaries} onGenerateFlashcardsForAll={() => generateForAll('flashcards')} onGenerateQuizForAll={() => generateForAll('questions')} isBatchLoading={isBatchLoading} batchLoadingMessage={batchLoadingMessage}/>;
-      case 'summary':
-        return <SummaryDetailView summary={currentSummary} subject={currentSubject} onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }} onDelete={() => handleDeleteSummary(currentSummary.id)} onGenerateQuiz={handleGenerateQuiz} onToggleComplete={handleToggleComplete} isCompleted={completedSummaries.includes(currentSummary.id)} onGetExplanation={handleGetExplanation} user={user} onAIUpdate={() => setAIUpdateModalOpen(true)} onGenerateFlashcards={handleGenerateFlashcards} />;
-      case 'admin':
-        return <AdminPanel onBack={handleBackToDashboard} />;
-      default:
-        return <div>Carregando...</div>;
-    }
-  };
+.chatbot-input-area .icon-btn {
+    color: var(--text-color);
+}
+.chatbot-input-area .icon-btn:hover {
+    color: var(--primary-accent);
+}
 
-  const breadcrumbPaths = useMemo(() => {
-      const paths = [{ name: 'Início', onClick: handleBackToDashboard }];
-      if (view === 'subject' && currentSubject) paths.push({ name: currentSubject.name, onClick: () => {} });
-      else if (view === 'summary' && currentSubject && currentSummary) {
-          paths.push({ name: currentSubject.name, onClick: handleBackToSubject });
-          paths.push({ name: currentSummary.title, onClick: () => {} });
-      }
-      return paths;
-  }, [view, currentSubject, currentSummary]);
+.chatbot-input-area .icon-btn.listening {
+    color: var(--danger-accent);
+    animation: pulse 1.5s infinite;
+}
 
-  const showHeader = user && user.status === 'active' && view !== 'dashboard' && view !== 'admin';
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
 
-  return (
-    <>
-      {showHeader && (
-          <div className="main-header">
-              <Breadcrumbs paths={breadcrumbPaths} />
-              <ThemeToggle theme={theme} toggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} />
-          </div>
-      )}
-      {renderContent()}
+/* --- Animação de "digitando" da IA --- */
+.message-bubble.ai .loader-sm {
+    border-color: var(--text-color);
+    border-top-color: transparent;
+}
 
-      <SubjectModal isOpen={isSubjectModalOpen} onClose={() => setSubjectModalOpen(false)} onSave={handleSaveSubject} subject={editingSubject} existingSubjects={subjects} user={user} terms={terms} />
-      <SummaryModal isOpen={isSummaryModalOpen} onClose={() => setSummaryModalOpen(false)} onSave={handleSaveSummary} summary={editingSummary} subjectId={currentSubjectId} />
-      <AISplitterModal isOpen={isAISplitterModalOpen} onClose={() => setAISplitterModalOpen(false)} onSummariesCreated={handleSplitAndSaveSummaries} />
-      {isAIUpdateModalOpen && currentSummary && <AIUpdateModal summary={currentSummary} onClose={() => setAIUpdateModalOpen(false)} onUpdate={(newContent) => handleUpdateSummaryContent(currentSummary.id, newContent)} />}
-    </>
-  );
-};
+/* --- ESTILOS PARA A ANIMAÇÃO DE "DIGITANDO" DO CHATBOT --- */
 
-const root = createRoot(document.getElementById('root'));
-root.render(<App />);
+.message-bubble.ai .typing-indicator {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.typing-indicator span {
+  height: 8px;
+  width: 8px;
+  background-color: var(--text-color);
+  opacity: 0.5;
+  border-radius: 50%;
+  display: inline-block;
+  margin: 0 2px;
+  animation: blink 1.4s infinite both;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes blink {
+  0% {
+    opacity: 0.2;
+    transform: scale(1);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 0.2;
+    transform: scale(1);
+  }
+}
+
+/* Estilo adicional para o loader "Buscando especialista" */
+.loader-container.full-chat {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* --- Estilos para o Layout do Mapa Mental e Abas --- */
+
+/* Garante que o container do React Flow ocupe o espaço disponível */
+.reactflow-wrapper {
+    width: 100%;
+    height: 600px; /* Altura padrão para o mapa mental */
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: var(--background-secondary);
+}
+
+/* --- Estilos para as Abas (Tabs) --- */
+
+.tabs-nav {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 1.5rem;
+}
+
+.tab-button {
+    padding: 0.75rem 1.5rem;
+    cursor: pointer;
+    background-color: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    font-weight: 500;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s ease-in-out;
+}
+
+.tab-button.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.tab-button:hover:not(.active) {
+    color: var(--text-primary);
+    background-color: var(--background-hover);
+}
+
+.tab-content .hidden {
+    display: none;
+}
+
+
+/* --- Estilos para o Layout Detalhado do Resumo --- */
+
+.summary-detail-layout {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+}
+
+.summary-detail-view {
+    flex-grow: 1;
+    min-width: 0; /* Impede que o conteúdo empurre o layout */
+}
+
+/* Botão para mostrar/esconder o sumário (Table of Contents) */
+.toc-toggle-btn {
+    margin-right: 1rem;
+    color: var(--text-secondary);
+}
+
+.toc-toggle-btn:hover {
+    color: var(--primary-color);
+}
+
+/* --- [ADICIONE ISTO] VARIÁVEIS DE COR E ESTILOS GLOBAIS --- */
+/* Se você já tem variáveis, pode mesclar ou ignorar esta parte */
+:root {
+    --primary-color: #007BFF;
+    --primary-hover: #0056b3;
+    --secondary-bg: #343a40;
+    --bg-color: #1a1a1a;
+    --bg-color-light: #2c2c2c;
+    --bg-color-darker: #121212;
+    --text-color: #f8f9fa;
+    --text-color-muted: #adb5bd;
+    --border-color: #495057;
+    --danger-accent: #e53e3e;
+    --success-accent: #38a169;
+}
+
+body.light-mode {
+    --secondary-bg: #e9ecef;
+    --bg-color: #ffffff;
+    --bg-color-light: #f8f9fa;
+    --bg-color-darker: #e9ecef;
+    --text-color: #212529;
+    --text-color-muted: #6c757d;
+    --border-color: #dee2e6;
+}
+
+/* --- [ADICIONE ISTO] ESTILOS GLOBAIS DE LOADER --- */
+
+.loader-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 9999;
+    flex-direction: column;
+    gap: 1rem;
+    color: var(--text-color);
+}
+
+.loader {
+    border: 5px solid #f3f3f3; /* Cinza claro */
+    border-top: 5px solid var(--primary-color); /* Azul */
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+}
+
+.loader-sm {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid var(--primary-color);
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* --- [ADICIONE ISTO] TELAS DE LOGIN, CADASTRO E ASSINATURA --- */
+
+.login-screen {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    width: 100%;
+    background-color: var(--bg-color-darker);
+    padding: 1rem;
+}
+
+.login-card {
+    background-color: var(--bg-color);
+    padding: 2rem 2.5rem;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+    border: 1px solid var(--border-color);
+}
+
+.login-card h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+}
+
+.login-card h1 span {
+    color: var(--primary-color);
+}
+
+.login-card h2 {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--text-color);
+}
+
+
+.login-card p {
+    color: var(--text-color-muted);
+    margin-bottom: 2rem;
+    line-height: 1.5;
+}
+
+.form-group {
+    text-align: left;
+    margin-bottom: 1.25rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.input, .select-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-color-light);
+    color: var(--text-color);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input:focus, .select-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+}
+
+.btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    border: none;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+    width: 100%;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+}
+
+.btn-secondary {
+    background-color: var(--secondary-bg);
+    color: var(--text-color);
+}
+
+.btn-secondary:hover {
+    background-color: var(--border-color);
+}
+
+.error-message {
+    color: var(--danger-accent);
+    background-color: rgba(229, 62, 62, 0.1);
+    padding: 0.75rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.toggle-auth-btn {
+    background: none;
+    border: none;
+    color: var(--primary-color);
+    cursor: pointer;
+    padding: 0.5rem;
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+}
+
+.toggle-auth-btn:hover {
+    text-decoration: underline;
+}
+
+/* --- [ADICIONE ISTO] AJUSTES PARA COMPONENTES EXISTENTES --- */
+
+/* Garante que o container principal não cubra a tela de login */
+.container {
+    padding: 2rem;
+}
+
+/* Estilo para o loader dentro de um botão ou área pequena */
+.batch-loader {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0.5rem 1rem;
+    background-color: var(--secondary-bg);
+    border-radius: 8px;
+}
+
+/* Espaçamento para o botão "Adicionar Disciplina" */
+.add-subject-button-container {
+  margin-bottom: 2rem; /* Aumenta a distância para os elementos abaixo */
+  display: flex;
+  justify-content: flex-start; /* ou center se quiser centralizar */
+}
+
+/* Estilo para os subtítulos dos resumos */
+.summary-content h2,
+.summary-content h3 {
+  /* Define a cor de fundo usando a variável que passamos */
+  background-color: var(--subject-color);
+
+  /* Cor do texto e sombra para garantir a legibilidade */
+  color: #ffffff;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.25);
+
+  /* Espaçamento interno para o texto não ficar colado nas bordas */
+  padding: 8px 16px;
+
+  /* Espaçamento externo para separar o título do resto do conteúdo */
+  margin-top: 2rem;
+  margin-bottom: 1.5rem;
+
+  /* Cantos arredondados para um visual mais suave */
+  border-radius: 8px;
+
+  /* Garante que a caixa ocupe toda a largura disponível */
+  display: inline-block;
+  max-width: fit-content;
+  font-size: 1.4rem; /* Tamanho padrão para os títulos (h2) */
+
+}
+
+/* Opcional: Estilo um pouco mais sutil para os subtítulos de menor nível (h3) */
+.summary-content h3 {
+  padding: 6px 14px;
+  font-size: 1.0em; /* Ajuste o tamanho conforme preferir */
+}
+
+
+/* ==========================================================================
+   ADMIN PANEL STYLES
+   ========================================================================== */
+
+/* Container principal do painel */
+.admin-panel {
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+/* Seções individuais (Gerenciamento, Relatórios) */
+.admin-section {
+    background-color: var(--card-bg);
+    padding: 1.5rem 2rem;
+    border-radius: 12px;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--border-color);
+}
+
+.light-mode .admin-section {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.admin-section h2 {
+    font-size: 1.5rem;
+    color: var(--text-primary);
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Estilização da Tabela de Usuários */
+.admin-table {
+    width: 100%;
+    border-collapse: collapse; /* Remove espaços entre as células */
+    text-align: left;
+    font-size: 0.95rem;
+}
+
+.admin-table thead {
+    background-color: var(--background);
+}
+
+.admin-table th, .admin-table td {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+.admin-table th {
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+}
+
+.admin-table tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.admin-table tbody tr:hover {
+    background-color: var(--hover-bg);
+}
+
+/* Estilização dos Selos de Status (Ativo, Pendente, etc.) */
+.status-badge {
+    padding: 0.25rem 0.6rem;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: capitalize;
+    display: inline-block;
+    border: 1px solid transparent;
+}
+
+.status-active {
+    background-color: rgba(39, 174, 96, 0.15);
+    color: #27ae60;
+    border-color: rgba(39, 174, 96, 0.3);
+}
+
+.status-pending_approval {
+    background-color: rgba(243, 156, 18, 0.15);
+    color: #f39c12;
+    border-color: rgba(243, 156, 18, 0.3);
+}
+
+.status-blocked {
+    background-color: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+    border-color: rgba(231, 76, 60, 0.3);
+}
+
+/* Container dos botões de ação na tabela */
+.user-actions {
+    display: flex;
+    gap: 0.5rem; /* Espaço entre os botões */
+    align-items: center;
+}
+
+/* Estilos para os botões pequenos da tabela */
+.btn-sm {
+    padding: 0.3rem 0.8rem;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn-sm:hover {
+    transform: translateY(-1px);
+    opacity: 0.9;
+}
+
+.btn-success {
+    background-color: #27ae60;
+    color: white;
+}
+
+.btn-danger {
+    background-color: #e74c3c;
+    color: white;
+}
+
+.btn-secondary {
+    background-color: #7f8c8d;
+    color: white;
+}
+
+/* Estilos para os cartões de relatório de uso */
+.usage-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.stat-card {
+    background-color: var(--background);
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+}
+
+.stat-card h4 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.stat-card p {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 2.25rem;
+    font-weight: 700;
+}
+
+/* ==========================================================================
+   ESTILOS DO PAINEL ADMINISTRATIVO E NOVOS COMPONENTES
+   ========================================================================== */
+
+/* --- Layout Principal do Painel Admin --- */
+.admin-panel {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.admin-section {
+  background-color: var(--surface-color);
+  border-radius: 12px;
+  padding: 1.5rem 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.admin-section h2 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1rem;
+}
+
+/* --- Abas de Navegação (Tabs) --- */
+.admin-tabs {
+  margin-bottom: -1px; /* Alinha a borda da aba com a borda do container */
+  border-bottom: 1px solid var(--border-color);
+}
+
+.admin-tabs .tab-button {
+  border-radius: 8px 8px 0 0;
+  margin-bottom: -1px; /* Move a borda inferior para baixo */
+  border: 1px solid transparent;
+  border-bottom: none;
+}
+
+.admin-tabs .tab-button.active {
+  background-color: var(--surface-color);
+  border-color: var(--border-color);
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+/* --- Tabelas de Dados --- */
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.admin-table thead th {
+  background-color: var(--hover-color);
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.admin-table tbody td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-table tbody tr:hover {
+  background-color: var(--hover-color);
+}
+
+/* --- Badges de Status do Usuário --- */
+.status-badge {
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: capitalize;
+}
+
+.status-badge.status-active {
+  background-color: rgba(40, 167, 69, 0.15);
+  color: #28a745;
+}
+
+.status-badge.status-pending_approval {
+  background-color: rgba(255, 193, 7, 0.15);
+  color: #ffc107;
+}
+
+.status-badge.status-blocked {
+  background-color: rgba(220, 53, 69, 0.15);
+  color: #dc3545;
+}
+
+.light-mode .status-badge.status-active { background-color: #d4edda; color: #155724; }
+.light-mode .status-badge.status-pending_approval { background-color: #fff3cd; color: #856404; }
+.light-mode .status-badge.status-blocked { background-color: #f8d7da; color: #721c24; }
+
+
+/* --- Ações do Usuário na Tabela --- */
+.user-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-sm {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+}
+.btn-success { background-color: #28a745; color: white; }
+.btn-danger { background-color: #dc3545; color: white; }
+.btn-success:hover { background-color: #218838; }
+.btn-danger:hover { background-color: #c82333; }
+
+/* --- Cards de Estatísticas (Reports) --- */
+.stat-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background-color: var(--surface-color);
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.stat-card p {
+  margin: 0;
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* --- Seção de Custos no Painel --- */
+.costs-input-section {
+  margin-bottom: 2rem;
+}
+
+.costs-input-section label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.costs-input-section .input-group {
+  display: flex;
+  max-width: 400px;
+}
+
+.costs-input-section .input-group .input {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  flex-grow: 1;
+}
+
+.costs-input-section .input-group .btn {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+
+/* --- Seletor de Período do Admin no Dashboard --- */
+.admin-term-selector {
+  padding: 1rem 2rem;
+  background-color: var(--surface-color);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+.admin-term-selector label {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.admin-term-selector .select-input {
+  min-width: 200px;
+}
+
+
+/* --- Responsividade --- */
+@media (max-width: 768px) {
+  .admin-panel {
+    padding: 1rem;
+  }
+  .admin-section {
+    padding: 1rem;
+  }
+  .admin-table {
+    display: block;
+    overflow-x: auto; /* Permite scroll horizontal em tabelas largas */
+    white-space: nowrap;
+  }
+  .dashboard-header .header-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+  }
+  .stat-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dashboard-global-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap; /* Para telas menores */
+}
+
+/* CSS para o Seletor de Cores no Modal */
+.color-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.color-swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch.selected {
+  border-color: var(--primary-color);
+  transform: scale(1.15);
+  box-shadow: 0 0 5px var(--primary-color);
+}
