@@ -2802,3 +2802,12 @@ body.light-mode {
     grid-template-columns: 1fr;
   }
 }
+
+.dashboard-global-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap; /* Para telas menores */
+}
