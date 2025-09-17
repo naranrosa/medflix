@@ -1103,32 +1103,29 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
 const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user, terms }) => {
     const [name, setName] = useState('');
     const [selectedTermId, setSelectedTermId] = useState('');
-    // NOVO: Adiciona um estado para a cor selecionada
     const [color, setColor] = useState('');
-    const isAdminOrAmbassador = user?.role === 'admin' || user?.role === 'embaixador';
 
     useEffect(() => {
         if (isOpen) {
             setName(subject?.name || '');
-            setSelectedTermId(subject?.term_id || (isAdminOrAmbassador ? '' : user?.term_id));
-            // NOVO: Define a cor atual do subject ou a primeira cor da lista se for um novo
+            // APENAS ADMIN seleciona período, embaixador usa o seu próprio
+            setSelectedTermId(subject?.term_id || (user.role === 'admin' ? '' : user?.term_id));
             setColor(subject?.color || subjectColors[0]);
         }
-    }, [isOpen, subject, user, isAdminOrAmbassador]);
+    }, [isOpen, subject, user]);
 
     if (!isOpen) return null;
 
     const handleSubmit = (e) => {
         e.preventDefault();
 
-        if (isAdminOrAmbassador && !selectedTermId) {
+        // A verificação de período só se aplica ao admin, pois ele é o único que pode escolher
+        if (user.role === 'admin' && !selectedTermId) {
             alert('Por favor, selecione um período para esta disciplina.');
             return;
         }
 
-        // MODIFICADO: A cor agora vem do estado, não é mais gerada aleatoriamente
-        const termIdToSave = isAdminOrAmbassador ? selectedTermId : user?.term_id;
-
+        const termIdToSave = user.role === 'admin' ? selectedTermId : user?.term_id;
         onSave({ ...subject, name, color, term_id: termIdToSave });
     };
 
@@ -1142,7 +1139,8 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
                         <input id="subject-name" className="input" type="text" value={name} onChange={e => setName(e.target.value)} required />
                     </div>
 
-                    {isAdminOrAmbassador && (
+                    {/* Seletor de período visível APENAS para o admin */}
+                    {user.role === 'admin' && (
                         <div className="form-group">
                             <label htmlFor="term-select-subject">Período</label>
                             <select
@@ -1160,7 +1158,6 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
                         </div>
                     )}
 
-                    {/* NOVO: Seletor de Cores */}
                     <div className="form-group">
                         <label>Cor da Disciplina</label>
                         <div className="color-selector">
@@ -1174,7 +1171,6 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
                             ))}
                         </div>
                     </div>
-
 
                     <div className="modal-actions">
                         <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
@@ -1822,9 +1818,10 @@ const App = () => {
 
             if (fullUser.status === 'active') {
                 await fetchUserProgress(currentSession.user.id);
+                // Admin e embaixador podem ter term_id, mas a lógica de fetch é diferente
                 if (fullUser.role === 'admin') {
-                    await fetchAppData(null, 'admin');
-                } else if (fullUser.term_id) {
+                    await fetchAppData(null, 'admin'); // Admin vê tudo
+                } else if (fullUser.term_id) { // Embaixador e Aluno
                     await fetchAppData(fullUser.term_id, fullUser.role);
                 }
             }
@@ -1861,6 +1858,7 @@ const App = () => {
   const fetchAppData = async (termId, userRole) => {
     let subjectsQuery = supabase.from('subjects').select('*');
 
+    // Admin vê todas as disciplinas, embaixador e aluno veem apenas as do seu termo
     if (userRole !== 'admin') {
       subjectsQuery = subjectsQuery.eq('term_id', termId);
     }
@@ -1869,6 +1867,8 @@ const App = () => {
     if (subjectsError) console.error("Erro ao buscar disciplinas:", subjectsError);
     setSubjects(subjectsData || []);
 
+    // A busca de resumos pode continuar global, pois serão filtrados na UI
+    // com base nas disciplinas já filtradas
     const { data: summariesData, error: summariesError } = await supabase.from('summaries').select('*').order('position', { ascending: true });
     if (summariesError) console.error("Erro ao buscar resumos:", summariesError);
 
@@ -1959,13 +1959,21 @@ const App = () => {
         if (error) alert(error.message);
         else if (data) setSummaries([...summaries, data]);
     } else {
-        const { data, error } = await supabase.from('summaries').update(payload).eq('id', summaryData.id).select().single();
-        if (error) alert(error.message);
-        else if (data) setSummaries(summaries.map(s => s.id === data.id ? data : s));
+        // --- CORREÇÃO APLICADA AQUI ---
+        // 1. Apenas faz o update, sem o .select().single()
+        const { error } = await supabase.from('summaries').update(payload).eq('id', summaryData.id);
+
+        if (error) {
+            alert(error.message);
+        } else {
+            // 2. Se não houve erro, atualiza o estado local com o `payload` que já temos
+            setSummaries(summaries.map(s => s.id === payload.id ? payload : s));
+        }
     }
     setSummaryModalOpen(false);
     setEditingSummary(null);
   };
+
 
   const handleDeleteSummary = async (summaryId) => {
       if (window.confirm("Tem certeza que deseja excluir este resumo?")) {
@@ -2138,12 +2146,14 @@ const App = () => {
   const summariesForCurrentSubject = useMemo(() => summaries.filter(s => s.subject_id === currentSubjectId).sort((a, b) => (a.position ?? 0) - (b.position ?? 0)), [summaries, currentSubjectId]);
 
   const subjectsForUser = useMemo(() => {
+    // Para o admin, permite filtrar por um termo selecionado ou ver todos
     if (user?.role === 'admin') {
       if (selectedTermForAdmin) {
         return subjects.filter(s => String(s.term_id) === String(selectedTermForAdmin));
       }
-      return subjects;
+      return subjects; // Retorna todos se nenhum termo for selecionado
     }
+    // Para embaixador e aluno, 'subjects' já vem pré-filtrado por termo do fetchAppData
     return subjects;
   }, [subjects, user, selectedTermForAdmin]);
 
