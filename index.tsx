@@ -1715,10 +1715,10 @@ const PendingApprovalScreen = () => (
                 Seu cadastro foi recebido. Para concluir e liberar seu acesso, entre em contato pelo WhatsApp com o número abaixo e envie seu comprovante de pagamento.
             </p>
             <div className="contact-info">
-                <strong>(14) 99872-9882</strong>
+                <strong>(14) 99872-9082</strong>
             </div>
             <a
-                href="https://wa.me/5514998729882"
+                href="https://wa.me/5514998729082"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-primary"
