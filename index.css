@@ -2811,3 +2811,30 @@ body.light-mode {
   margin-bottom: 2rem;
   flex-wrap: wrap; /* Para telas menores */
 }
+
+/* CSS para o Seletor de Cores no Modal */
+.color-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.color-swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch.selected {
+  border-color: var(--primary-color);
+  transform: scale(1.15);
+  box-shadow: 0 0 5px var(--primary-color);
+}
