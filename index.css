@@ -2838,3 +2838,183 @@ body.light-mode {
   transform: scale(1.15);
   box-shadow: 0 0 5px var(--primary-color);
 }
+
+/* ============================================= */
+/* --- Estilos da Semana Integradora --- */
+/* ============================================= */
+
+.integrator-week-view {
+    padding-bottom: 4rem; /* Garante espaço no final da página */
+}
+
+.integrator-form {
+    background-color: var(--card-background);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-top: 2rem;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.integrator-form h2 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+}
+
+.integrator-form p {
+    margin-bottom: 2rem;
+    color: var(--text-secondary-color);
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.question-input-group {
+    display: grid;
+    grid-template-columns: 1fr auto auto; /* Colunas para texto, select e botão */
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border-radius: 8px;
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+}
+
+.question-input-group textarea {
+    min-height: 48px; /* Altura mínima para o campo de texto */
+    resize: vertical; /* Permite redimensionar verticalmente */
+    width: 100%;
+    padding: 0.75rem; /* Ajuste no padding interno */
+    line-height: 1.5;
+}
+
+.question-input-group .select-input {
+    min-width: 200px; /* Largura mínima para o seletor */
+    height: 48px;
+}
+
+.integrator-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.error-message {
+    color: var(--danger-accent);
+    text-align: center;
+    margin-top: 1rem;
+    font-weight: 500;
+}
+
+
+/* --- Seção de Respostas Geradas --- */
+
+.answers-section {
+    margin-top: 3rem;
+}
+
+.answers-section h2 {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: var(--text-color);
+}
+
+.answer-card {
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.answer-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.answer-card h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.25rem;
+    color: var(--primary-color); /* Destaque para a pergunta */
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.answer-content p {
+    color: var(--text-color);
+    line-height: 1.7;
+    margin-bottom: 1rem;
+}
+
+/* Garante que o último parágrafo não tenha margem inferior */
+.answer-content p:last-child {
+    margin-bottom: 0;
+}
+
+
+.answer-reference {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--border-color);
+}
+
+.answer-reference strong {
+    color: var(--text-secondary-color);
+    font-size: 0.9rem;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.answer-reference p {
+    font-family: 'Courier New', Courier, monospace;
+    background-color: var(--background-color);
+    padding: 0.75rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: var(--text-secondary-color);
+    white-space: pre-wrap; /* Quebra de linha para referências longas */
+    word-wrap: break-word;
+}
+
+/* --- Responsividade --- */
+
+@media (max-width: 768px) {
+    .integrator-form {
+        padding: 1.5rem;
+    }
+
+    .question-input-group {
+        grid-template-columns: 1fr; /* Uma coluna em telas menores */
+    }
+
+    .question-input-group .select-input {
+        min-width: 100%; /* Ocupa a largura total */
+    }
+
+    .question-input-group .icon-btn {
+        position: absolute; /* Posiciona o botão de deletar */
+        top: 0.75rem;
+        right: 0.75rem;
+    }
+    .question-input-group {
+        position: relative;
+        padding-top: 3rem; /* Espaço para o botão de deletar não sobrepor o conteúdo */
+    }
+
+    .integrator-actions {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .integrator-actions .btn {
+        width: 100%;
+        text-align: center;
+    }
+}
