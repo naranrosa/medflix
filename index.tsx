@@ -1771,6 +1771,28 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
 
     return (
         <div className="summary-detail-layout">
+            {/*
+              INÍCIO DA CORREÇÃO DE ESTILO
+              Este bloco de CSS resolve o problema de layout onde um título (h2)
+              e um subtítulo (h3) aparecem em linhas separadas. As regras abaixo
+              garantem que, quando um h3 segue um h2, eles sejam exibidos na mesma
+              linha e com as bordas arredondadas ajustadas para parecerem um único elemento.
+            */}
+            <style>{`
+                .summary-content h2:has(+ h3) {
+                  display: inline-block;
+                  vertical-align: middle;
+                  margin-bottom: 0;
+                  border-top-right-radius: 0;
+                  border-bottom-right-radius: 0;
+                }
+                .summary-content h2 + h3 {
+                  display: inline-block;
+                  vertical-align: middle;
+                  border-top-left-radius: 0;
+                  border-bottom-left-radius: 0;
+                }
+            `}</style>
             {activeTab === 'summary' && isTocVisible && <TableOfContents content={summary.content} />}
             <div className="summary-detail-view">
                 <div className="summary-header">
