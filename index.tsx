@@ -227,25 +227,50 @@ const identifyTitlesSchema = {
 
 // NOVO: Componente para a "Semana Integradora"
 const IntegratorWeekView = ({ subject, allSubjects, user }) => {
-    const [questions, setQuestions] = useState([{ id: 1, text: '', subject: '' }]);
+    // 1. Crie uma chave de storage única para as perguntas e respostas
+    const questionsStorageKey = `integrator_week_questions_${user.id}`;
+    const answersStorageKey = `integrator_week_answers_${user.id}`;
+
+    // 2. Ao inicializar o estado, tente carregar do localStorage
+    const [questions, setQuestions] = useState(() => {
+        try {
+            const savedQuestions = localStorage.getItem(questionsStorageKey);
+            // Se houver perguntas salvas e não for uma string vazia, use-as.
+            // Senão, comece com uma pergunta em branco.
+            return savedQuestions && savedQuestions.length > 2
+                   ? JSON.parse(savedQuestions)
+                   : [{ id: 1, text: '', subject: '' }];
+        } catch (e) {
+            console.error("Falha ao carregar perguntas do localStorage", e);
+            return [{ id: 1, text: '', subject: '' }];
+        }
+    });
+
     const [generatedAnswers, setGeneratedAnswers] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
-    const storageKey = `integrator_week_answers_${user.id}`;
+    // 3. Crie um useEffect que salva as perguntas sempre que elas mudam
+    useEffect(() => {
+        try {
+            localStorage.setItem(questionsStorageKey, JSON.stringify(questions));
+        } catch (e) {
+            console.error("Falha ao salvar perguntas no localStorage", e);
+        }
+    }, [questions, questionsStorageKey]);
 
     // Carrega respostas do localStorage ao iniciar
     useEffect(() => {
         try {
-            const savedAnswers = localStorage.getItem(storageKey);
+            const savedAnswers = localStorage.getItem(answersStorageKey);
             if (savedAnswers) {
                 setGeneratedAnswers(JSON.parse(savedAnswers));
             }
         } catch (e) {
             console.error("Falha ao carregar respostas do localStorage", e);
-            localStorage.removeItem(storageKey);
+            localStorage.removeItem(answersStorageKey);
         }
-    }, [storageKey]);
+    }, [answersStorageKey]);
 
 
     const handleAddQuestion = () => {
@@ -294,9 +319,11 @@ ${JSON.stringify(validQuestions.map(q => ({ pergunta: q.text, materia: q.subject
             }
 
             setGeneratedAnswers(parsedJson.answers);
+            localStorage.setItem(answersStorageKey, JSON.stringify(parsedJson.answers));
 
-            // Salva as respostas no localStorage
-            localStorage.setItem(storageKey, JSON.stringify(parsedJson.answers));
+            // SUCESSO: Limpe as perguntas do storage e resete o estado para o padrão
+            localStorage.removeItem(questionsStorageKey);
+            setQuestions([{ id: 1, text: '', subject: '' }]);
 
         } catch (e) {
             console.error(e);
@@ -469,7 +496,6 @@ const QuizView = ({ questions, onGetExplanation }) => {
     );
 };
 
-// --- FUNÇÕES AUXILIARES ---
 // --- FUNÇÕES AUXILIARES ---
 const subjectColors = [
   '#E63946', // Vermelho
@@ -1991,7 +2017,7 @@ const App = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTermForAdmin, setSelectedTermForAdmin] = useState(null);
 
-  // NOVO: State para controlar o carregamento dos resumos em segundo plano
+  // State para controlar o carregamento dos resumos em segundo plano
   const [areSummariesLoaded, setAreSummariesLoaded] = useState(false);
 
 
@@ -2019,70 +2045,86 @@ const App = () => {
     setSubjects(subjectsData || []);
   };
 
-
+  // ==================================================================
+  // BLOCO DE useEffects DE AUTENTICAÇÃO E INICIALIZAÇÃO ATUALIZADO
+  // ==================================================================
   useEffect(() => {
-    const checkUserSession = async () => {
-      setLoading(true);
-      try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        setSession(currentSession);
-
-        if (currentSession?.user) {
-            const { data: profileData } = await supabase.from('profiles').select('*').eq('id', currentSession.user.id).single();
-            const fullUser = { ...currentSession.user, ...profileData };
-            setUser(fullUser);
-
-            if (fullUser.status === 'active') {
-                // NOVO: Chama a função RPC para incrementar o contador de login.
-                // Esta é uma operação "dispare e esqueça", não precisamos esperar por ela.
-                // Crie esta função no seu editor SQL do Supabase.
-                supabase.rpc('increment_login_count').then(({ error }) => {
-                    if (error) console.error('Falha ao registrar acesso:', error);
-                });
-
-                await fetchUserProgress(currentSession.user.id);
-                if (fullUser.role === 'admin') {
-                    await fetchAppData(null, 'admin');
-                } else if (fullUser.term_id) {
-                    await fetchAppData(fullUser.term_id, fullUser.role);
-                }
-            }
-        } else {
-            setUser(null);
-            setSubjects([]);
-            setSummaries([]);
-            setCompletedSummaries([]);
-        }
-      } catch (error) {
-        console.error("Erro ao verificar sessão:", error);
-        setUser(null);
-      } finally {
-        setLoading(false); // Encerra o loading principal assim que as disciplinas carregam
-      }
-    };
-
-    checkUserSession();
-
-    const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange((_event, session) => {
-        // Apenas chamar checkUserSession no evento de SIGNED_IN para evitar múltiplos incrementos
-        if (_event === 'SIGNED_IN') {
-            checkUserSession();
-        } else if (_event === 'SIGNED_OUT') {
-            setSession(null);
-            setUser(null);
-        }
+    // 1. Apenas busca a sessão inicial uma vez para evitar piscar a tela de login
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false); // Finaliza o loading principal aqui
     });
 
+    // 2. O listener agora SÓ atualiza o estado da sessão.
+    //    Ele não dispara mais a busca de dados diretamente.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+      }
+    );
+
+    // 3. Busca os períodos disponíveis
     const fetchTerms = async () => {
         const { data } = await supabase.from('terms').select('*').order('id');
         setTerms(data || []);
     };
     fetchTerms();
 
-    return () => authListener.unsubscribe();
+    return () => subscription.unsubscribe();
   }, []);
 
-  // NOVO: useEffect para carregar TODOS os resumos em segundo plano APÓS a UI principal estar visível.
+  // NOVO useEffect: Reage à MUDANÇA na sessão para carregar os dados do app
+  useEffect(() => {
+    // Roda se uma SESSÃO existe, mas o PERFIL do usuário ainda não foi carregado na app
+    if (session && !user) {
+      const setupUserAndFetchData = async () => {
+        setLoading(true); // Mostra um loading enquanto busca os dados do usuário
+        try {
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          if (profileError) throw profileError;
+
+          const fullUser = { ...session.user, ...profileData };
+          setUser(fullUser);
+
+          if (fullUser.status === 'active') {
+            // O incremento de login e a busca de dados agora acontecem AQUI.
+            // Isso só roda uma vez por login real.
+            await supabase.rpc('increment_login_count');
+            await fetchUserProgress(session.user.id);
+
+            if (fullUser.role === 'admin') {
+              await fetchAppData(null, 'admin');
+            } else if (fullUser.term_id) {
+              await fetchAppData(fullUser.term_id, fullUser.role);
+            }
+          }
+        } catch (error) {
+           console.error("Falha ao configurar o usuário e buscar dados:", error);
+           // Em caso de erro, deslogamos para evitar um estado inconsistente
+           supabase.auth.signOut();
+        } finally {
+            setLoading(false);
+        }
+      };
+
+      setupUserAndFetchData();
+    }
+    // Roda se a SESSÃO foi encerrada (logout)
+    else if (!session && user) {
+        setUser(null);
+        setSubjects([]);
+        setSummaries([]);
+        setCompletedSummaries([]);
+        setView('dashboard'); // Volta para a tela inicial
+    }
+  }, [session, user]); // Depende da sessão e do usuário
+
+  // useEffect para carregar TODOS os resumos em segundo plano APÓS a UI principal estar visível.
   useEffect(() => {
     const fetchAllSummariesInBackground = async () => {
         // Roda apenas se tivermos um usuário, disciplinas carregadas e os resumos ainda não foram buscados
@@ -2141,7 +2183,9 @@ const App = () => {
 
   const handleLogout = () => {
       if (user) {
+          // Limpa o storage da semana integradora ao deslogar
           localStorage.removeItem(`integrator_week_answers_${user.id}`);
+          localStorage.removeItem(`integrator_week_questions_${user.id}`);
       }
       supabase.auth.signOut();
   };
