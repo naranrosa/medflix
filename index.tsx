@@ -1986,12 +1986,34 @@ const App = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTermForAdmin, setSelectedTermForAdmin] = useState(null);
 
+  // NOVO: State para controlar o carregamento dos resumos em segundo plano
+  const [areSummariesLoaded, setAreSummariesLoaded] = useState(false);
+
 
   const fetchUserProgress = async (userId) => {
     const { data, error } = await supabase.from('user_summary_progress').select('summary_id').eq('user_id', userId);
     if (error) console.error("Erro ao buscar progresso do usuário:", error);
     else setCompletedSummaries(data.map(item => item.summary_id));
   };
+
+  // OTIMIZAÇÃO: Esta função agora carrega apenas as disciplinas, tornando o boot inicial muito mais rápido.
+  const fetchAppData = async (termId, userRole) => {
+    setAreSummariesLoaded(false); // Reseta o status de carregamento dos resumos
+    setSummaries([]); // Limpa os resumos antigos para evitar mostrar dados de outro usuário/período
+
+    let subjectsQuery = supabase.from('subjects').select('*');
+
+    if (userRole !== 'admin') {
+      subjectsQuery = subjectsQuery.eq('term_id', termId);
+    }
+
+    const { data: subjectsData, error: subjectsError } = await subjectsQuery.order('name');
+    if (subjectsError) {
+        console.error("Erro ao buscar disciplinas:", subjectsError);
+    }
+    setSubjects(subjectsData || []);
+  };
+
 
   useEffect(() => {
     const checkUserSession = async () => {
@@ -2007,10 +2029,9 @@ const App = () => {
 
             if (fullUser.status === 'active') {
                 await fetchUserProgress(currentSession.user.id);
-                // Admin e embaixador podem ter term_id, mas a lógica de fetch é diferente
                 if (fullUser.role === 'admin') {
-                    await fetchAppData(null, 'admin'); // Admin vê tudo
-                } else if (fullUser.term_id) { // Embaixador e Aluno
+                    await fetchAppData(null, 'admin');
+                } else if (fullUser.term_id) {
                     await fetchAppData(fullUser.term_id, fullUser.role);
                 }
             }
@@ -2024,7 +2045,7 @@ const App = () => {
         console.error("Erro ao verificar sessão:", error);
         setUser(null);
       } finally {
-        setLoading(false);
+        setLoading(false); // Encerra o loading principal assim que as disciplinas carregam
       }
     };
 
@@ -2043,30 +2064,44 @@ const App = () => {
     return () => authListener.unsubscribe();
   }, []);
 
+  // NOVO: useEffect para carregar TODOS os resumos em segundo plano APÓS a UI principal estar visível.
+  useEffect(() => {
+    const fetchAllSummariesInBackground = async () => {
+        // Roda apenas se tivermos um usuário, disciplinas carregadas e os resumos ainda não foram buscados
+        if (!user || subjects.length === 0 || areSummariesLoaded) return;
 
-  const fetchAppData = async (termId, userRole) => {
-    let subjectsQuery = supabase.from('subjects').select('*');
+        try {
+            const visibleSubjectIds = subjects.map(s => s.id);
+            if (visibleSubjectIds.length === 0) {
+                 setAreSummariesLoaded(true);
+                 return;
+            }
 
-    // Admin vê todas as disciplinas, embaixador e aluno veem apenas as do seu termo
-    if (userRole !== 'admin') {
-      subjectsQuery = subjectsQuery.eq('term_id', termId);
-    }
+            const { data: summariesData, error: summariesError } = await supabase
+                .from('summaries')
+                .select('*')
+                .in('subject_id', visibleSubjectIds)
+                .order('position', { ascending: true });
 
-    const { data: subjectsData, error: subjectsError } = await subjectsQuery;
-    if (subjectsError) console.error("Erro ao buscar disciplinas:", subjectsError);
-    setSubjects(subjectsData || []);
+            if (summariesError) throw summariesError;
 
-    // A busca de resumos pode continuar global, pois serão filtrados na UI
-    // com base nas disciplinas já filtradas
-    const { data: summariesData, error: summariesError } = await supabase.from('summaries').select('*').order('position', { ascending: true });
-    if (summariesError) console.error("Erro ao buscar resumos:", summariesError);
+            const parseJsonField = (field, fallback = []) => {
+                if (typeof field === 'string') { try { const parsed = JSON.parse(field); return Array.isArray(parsed) ? parsed : fallback; } catch (e) { return fallback; } }
+                return Array.isArray(field) ? field : fallback;
+            };
 
-    const parseJsonField = (field, fallback = []) => {
-        if (typeof field === 'string') { try { const parsed = JSON.parse(field); return Array.isArray(parsed) ? parsed : fallback; } catch (e) { return fallback; } }
-        return Array.isArray(field) ? field : fallback;
+            const processedSummaries = (summariesData || []).map(s => ({ ...s, questions: parseJsonField(s.questions), flashcards: parseJsonField(s.flashcards) }));
+            setSummaries(processedSummaries);
+        } catch (error) {
+            console.error("Erro ao carregar resumos em segundo plano:", error);
+        } finally {
+            setAreSummariesLoaded(true); // Marca que os resumos foram carregados (ou a tentativa falhou)
+        }
     };
-    setSummaries((summariesData || []).map(s => ({ ...s, questions: parseJsonField(s.questions), flashcards: parseJsonField(s.flashcards) })));
-  }
+
+    fetchAllSummariesInBackground();
+  }, [user, subjects, areSummariesLoaded]);
+
 
   useEffect(() => {
     document.body.className = theme === 'light' ? 'light-mode' : '';
@@ -2087,7 +2122,6 @@ const App = () => {
   }, [lastViewed, user]);
 
   const handleLogout = () => {
-      // LIMPA O LOCALSTORAGE DA SEMANA INTEGRADORA ANTES DE SAIR
       if (user) {
           localStorage.removeItem(`integrator_week_answers_${user.id}`);
       }
@@ -2095,7 +2129,6 @@ const App = () => {
   };
 
   const handleSelectSubject = (subject) => {
-    // LÓGICA ATUALIZADA PARA A SEMANA INTEGRADORA
     if (subject.name.toLowerCase().trim() === 'semana integradora') {
         setCurrentSubjectId(subject.id);
         setView('integrator_week');
@@ -2123,7 +2156,7 @@ const App = () => {
       else if (data) {
           const updatedUser = { ...user, ...data };
           setUser(updatedUser);
-          fetchAppData(newTermId, updatedUser.role);
+          await fetchAppData(newTermId, updatedUser.role);
       }
   };
 
@@ -2164,14 +2197,11 @@ const App = () => {
         if (error) alert(error.message);
         else if (data) setSummaries([...summaries, data]);
     } else {
-        // --- CORREÇÃO APLICADA AQUI ---
-        // 1. Apenas faz o update, sem o .select().single()
         const { error } = await supabase.from('summaries').update(payload).eq('id', summaryData.id);
 
         if (error) {
             alert(error.message);
         } else {
-            // 2. Se não houve erro, atualiza o estado local com o `payload` que já temos
             setSummaries(summaries.map(s => s.id === payload.id ? payload : s));
         }
     }
@@ -2265,7 +2295,6 @@ const App = () => {
         finally { setIsBatchLoading(false); setBatchLoadingMessage(''); }
     };
 
-    // NOVO: Lógica centralizada para gerar conteúdo para todos os resumos faltantes
     const handleGenerateContentForAllMissing = async (contentType) => {
         const visibleSubjectIds = new Set(subjectsForUser.map(s => s.id));
         const summariesToProcess = summaries.filter(s =>
@@ -2304,7 +2333,6 @@ const App = () => {
                     throw new Error(`Falha ao salvar no resumo "${summary.title}": ${error.message}`);
                 }
 
-                // Atualiza o estado local para a UI refletir a mudança imediatamente
                 setSummaries(prev =>
                     prev.map(s => s.id === summary.id ? { ...s, [contentType]: contentPayload } : s)
                 );
@@ -2319,7 +2347,6 @@ const App = () => {
         }
     };
 
-    // NOVO: Funções específicas que serão passadas para o Dashboard
     const handleGenerateFlashcardsForAllSubjects = () => handleGenerateContentForAllMissing('flashcards');
     const handleGenerateQuizForAllSubjects = () => handleGenerateContentForAllMissing('questions');
 
@@ -2351,18 +2378,19 @@ const App = () => {
   const summariesForCurrentSubject = useMemo(() => summaries.filter(s => s.subject_id === currentSubjectId).sort((a, b) => (a.position ?? 0) - (b.position ?? 0)), [summaries, currentSubjectId]);
 
   const subjectsForUser = useMemo(() => {
-    // Para o admin, permite filtrar por um termo selecionado ou ver todos
     if (user?.role === 'admin') {
       if (selectedTermForAdmin) {
         return subjects.filter(s => String(s.term_id) === String(selectedTermForAdmin));
       }
-      return subjects; // Retorna todos se nenhum termo for selecionado
+      return subjects;
     }
-    // Para embaixador e aluno, 'subjects' já vem pré-filtrado por termo do fetchAppData
     return subjects;
   }, [subjects, user, selectedTermForAdmin]);
 
   const searchResults = useMemo(() => {
+    // A busca só funciona se os resumos já foram carregados
+    if (!areSummariesLoaded) return { subjects: [], summaries: [], allSummaries: [] };
+
     const allSummariesWithSubject = summaries.map(sum => ({ ...sum, subjectName: subjects.find(sub => sub.id === sum.subject_id)?.name || '' }));
     if (!searchQuery.trim()) return { subjects: [], summaries: [], allSummaries: summaries };
     const q = searchQuery.toLowerCase();
@@ -2371,7 +2399,7 @@ const App = () => {
         summaries: allSummariesWithSubject.filter(s => s.title.toLowerCase().includes(q) && subjectsForUser.some(sub => sub.id === s.subject_id)),
         allSummaries: summaries
     };
-  }, [searchQuery, subjectsForUser, summaries, subjects]);
+  }, [searchQuery, subjectsForUser, summaries, subjects, areSummariesLoaded]);
 
   const lastViewedWithDetails = useMemo(() => lastViewed.map(lv => ({ ...lv, subjectName: subjects.find(s => s.id === lv.subject_id)?.name || '...' })).filter(lv => subjects.some(s => s.id === lv.subject_id)), [lastViewed, subjects]);
 
@@ -2411,7 +2439,6 @@ const App = () => {
         return (
             <>
                 {user.role === 'admin' && <AdminTermSelector />}
-                {/* ALTERADO: Passando as novas props para o Dashboard */}
                 <Dashboard
                     user={user}
                     termName={terms.find(t => t.id === user.term_id)?.name}
