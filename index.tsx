@@ -1102,7 +1102,8 @@ const AdminPanel = ({ onBack }) => {
         const fetchUsers = async () => {
             setLoadingUsers(true);
             try {
-                const { data, error } = await supabase.from('profiles').select('id, email, role, status').order('email');
+                // ALTERADO: Adicionado 'login_count' à consulta
+                const { data, error } = await supabase.from('profiles').select('id, email, role, status, login_count').order('email');
                 if (error) throw error;
                 setUsers(data || []);
             } catch (error) {
@@ -1133,9 +1134,11 @@ const AdminPanel = ({ onBack }) => {
                 <h2>Gerenciamento de Usuários</h2>
                  <table className="admin-table">
                     <thead>
+                        {/* ALTERADO: Adicionada a coluna 'Nº de Acessos' */}
                         <tr>
                             <th>Email</th>
                             <th>Status</th>
+                            <th>Nº de Acessos</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
@@ -1148,6 +1151,8 @@ const AdminPanel = ({ onBack }) => {
                                         {user.status === 'pending_approval' ? 'Pendente' : user.status === 'active' ? 'Ativo' : user.status === 'blocked' ? 'Bloqueado' : 'Indefinido'}
                                     </span>
                                 </td>
+                                {/* NOVO: Célula para exibir a contagem de acessos */}
+                                <td>{user.login_count || 0}</td>
                                 <td className="user-actions">
                                     {user.status !== 'active' && <button className="btn btn-sm btn-success" onClick={() => handleUpdateUserStatus(user.id, 'active')}>Liberar</button>}
                                     {user.status !== 'blocked' && <button className="btn btn-sm btn-danger" onClick={() => handleUpdateUserStatus(user.id, 'blocked')}>Bloquear</button>}
@@ -2028,6 +2033,13 @@ const App = () => {
             setUser(fullUser);
 
             if (fullUser.status === 'active') {
+                // NOVO: Chama a função RPC para incrementar o contador de login.
+                // Esta é uma operação "dispare e esqueça", não precisamos esperar por ela.
+                // Crie esta função no seu editor SQL do Supabase.
+                supabase.rpc('increment_login_count').then(({ error }) => {
+                    if (error) console.error('Falha ao registrar acesso:', error);
+                });
+
                 await fetchUserProgress(currentSession.user.id);
                 if (fullUser.role === 'admin') {
                     await fetchAppData(null, 'admin');
@@ -2052,7 +2064,13 @@ const App = () => {
     checkUserSession();
 
     const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange((_event, session) => {
-        checkUserSession();
+        // Apenas chamar checkUserSession no evento de SIGNED_IN para evitar múltiplos incrementos
+        if (_event === 'SIGNED_IN') {
+            checkUserSession();
+        } else if (_event === 'SIGNED_OUT') {
+            setSession(null);
+            setUser(null);
+        }
     });
 
     const fetchTerms = async () => {
