@@ -86,6 +86,34 @@ const generateAIContentWithRetry = async (prompt, schema, maxRetries = 4) => {
 };
 
 
+// --- SCHEMAS DA IA ---
+
+const integratorWeekAnswerSchema = {
+    type: Type.OBJECT,
+    properties: {
+        answers: {
+            type: Type.ARRAY,
+            description: 'Uma lista de respostas para as perguntas fornecidas.',
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    originalQuestion: { type: Type.STRING, description: 'O texto da pergunta original que foi respondida.' },
+                    answerText: {
+                        type: Type.STRING,
+                        description: 'Uma resposta completa e detalhada, com pelo menos dois parágrafos, sem usar tópicos ou listas numeradas. A resposta deve ser muito completa.'
+                    },
+                    abntReference: {
+                        type: Type.STRING,
+                        description: 'Uma referência bibliográfica de alta qualidade para a resposta, formatada no padrão ABNT.'
+                    }
+                },
+                required: ['originalQuestion', 'answerText', 'abntReference']
+            }
+        }
+    },
+    required: ['answers']
+};
+
 const enhancedContentSchema = {
     type: Type.OBJECT,
     properties: {
@@ -193,6 +221,167 @@ const identifyTitlesSchema = {
         }
     },
     required: ['titles']
+};
+
+// --- COMPONENTES ---
+
+// NOVO: Componente para a "Semana Integradora"
+const IntegratorWeekView = ({ subject, allSubjects, user }) => {
+    const [questions, setQuestions] = useState([{ id: 1, text: '', subject: '' }]);
+    const [generatedAnswers, setGeneratedAnswers] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const storageKey = `integrator_week_answers_${user.id}`;
+
+    // Carrega respostas do localStorage ao iniciar
+    useEffect(() => {
+        try {
+            const savedAnswers = localStorage.getItem(storageKey);
+            if (savedAnswers) {
+                setGeneratedAnswers(JSON.parse(savedAnswers));
+            }
+        } catch (e) {
+            console.error("Falha ao carregar respostas do localStorage", e);
+            localStorage.removeItem(storageKey);
+        }
+    }, [storageKey]);
+
+
+    const handleAddQuestion = () => {
+        setQuestions(prev => [...prev, { id: Date.now(), text: '', subject: '' }]);
+    };
+
+    const handleQuestionChange = (id, field, value) => {
+        setQuestions(prev => prev.map(q => q.id === id ? { ...q, [field]: value } : q));
+    };
+
+    const handleRemoveQuestion = (id) => {
+        setQuestions(prev => prev.filter(q => q.id !== id));
+    };
+
+     const handleGetAnswers = async () => {
+        const validQuestions = questions.filter(q => q.text.trim() && q.subject.trim());
+        if (validQuestions.length === 0) {
+            setError('Por favor, adicione pelo menos uma pergunta válida com uma matéria selecionada.');
+            return;
+        }
+
+        setIsLoading(true);
+        setError('');
+        setGeneratedAnswers([]);
+
+        try {
+            // --- PROMPT APRIMORADO E MAIS ROBUSTO ---
+            const prompt = `
+**PAPEL DE SISTEMA:** Você é um especialista em medicina e sua única tarefa é gerar respostas factuais e acadêmicas para as perguntas enviadas, seguindo estritamente o formato solicitado.
+
+**INSTRUÇÕES:**
+1. Para cada pergunta na lista abaixo, você deve fornecer uma resposta detalhada e completa.
+2. A resposta deve ter no mínimo dois parágrafos de texto discursivo.
+3. A resposta NÃO DEVE conter tópicos, listas numeradas ou marcadores.
+4. Ao final de cada resposta, forneça uma referência bibliográfica de alta qualidade em formato ABNT.
+5. Sua saída DEVE ser apenas o JSON. NÃO inclua absolutamente nenhum texto, preâmbulo, explicação, comentário ou conversa antes ou depois do bloco JSON.
+
+**PERGUNTAS PARA PROCESSAR:**
+${JSON.stringify(validQuestions.map(q => ({ pergunta: q.text, materia: q.subject })))}
+`;
+
+            const parsedJson = await generateAIContentWithRetry(prompt, integratorWeekAnswerSchema);
+
+            if (!parsedJson.answers || parsedJson.answers.length === 0) {
+                 throw new Error("A IA não retornou respostas válidas.");
+            }
+
+            setGeneratedAnswers(parsedJson.answers);
+
+            // Salva as respostas no localStorage
+            localStorage.setItem(storageKey, JSON.stringify(parsedJson.answers));
+
+        } catch (e) {
+            console.error(e);
+            setError('Ocorreu um erro ao gerar as respostas. A IA pode ter retornado um formato inválido. Por favor, tente novamente.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Filtra a própria disciplina "Semana Integradora" da lista de matérias
+    const availableSubjects = allSubjects.filter(s => s.id !== subject.id);
+
+    return (
+        <div className="container integrator-week-view">
+            <div className="dashboard-header">
+                <h1>{subject.name}</h1>
+            </div>
+
+            <div className="integrator-form">
+                <h2>Faça suas perguntas</h2>
+                <p>Digite sua pergunta, escolha a matéria correspondente e adicione quantas perguntas precisar. Ao final, clique em "Obter Respostas".</p>
+
+                {questions.map((q, index) => (
+                    <div key={q.id} className="question-input-group">
+                        <textarea
+                            className="input"
+                            placeholder={`Digite sua pergunta aqui...`}
+                            value={q.text}
+                            onChange={(e) => handleQuestionChange(q.id, 'text', e.target.value)}
+                            rows={2}
+                        />
+                        <select
+                            className="select-input"
+                            value={q.subject}
+                            onChange={(e) => handleQuestionChange(q.id, 'subject', e.target.value)}
+                        >
+                            <option value="" disabled>Selecione a matéria...</option>
+                            {availableSubjects.map(s => (
+                                <option key={s.id} value={s.name}>{s.name}</option>
+                            ))}
+                        </select>
+                        <IconButton onClick={() => handleRemoveQuestion(q.id)} className="danger-icon-btn" disabled={questions.length === 1}>
+                           <DeleteIcon />
+                        </IconButton>
+                    </div>
+                ))}
+
+                <div className="integrator-actions">
+                    <button className="btn btn-secondary" onClick={handleAddQuestion}>Adicionar Pergunta</button>
+                    <button className="btn btn-primary" onClick={handleGetAnswers} disabled={isLoading}>
+                        {isLoading ? 'Gerando...' : 'Obter Respostas'}
+                    </button>
+                </div>
+            </div>
+
+            {error && <p className="error-message" style={{textAlign: 'center', marginTop: '1.5rem'}}>{error}</p>}
+
+            {isLoading && (
+                <div className="loader-container">
+                    <div className="loader"></div>
+                    <p>Aguarde, a IA está elaborando as respostas...</p>
+                </div>
+            )}
+
+            {generatedAnswers.length > 0 && (
+                <div className="answers-section">
+                    <h2>Respostas Geradas</h2>
+                    {generatedAnswers.map((answer, index) => (
+                        <div key={index} className="answer-card">
+                            <h3>{answer.originalQuestion}</h3>
+                            <div className="answer-content">
+                                {answer.answerText.split('\n').map((paragraph, pIndex) => (
+                                    <p key={pIndex}>{paragraph}</p>
+                                ))}
+                            </div>
+                            <div className="answer-reference">
+                                <strong>Referência (ABNT):</strong>
+                                <p>{answer.abntReference}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 };
 
 
@@ -1897,8 +2086,24 @@ const App = () => {
     }
   }, [lastViewed, user]);
 
-  const handleLogout = () => supabase.auth.signOut();
-  const handleSelectSubject = (subject) => { setCurrentSubjectId(subject.id); setView('subject'); };
+  const handleLogout = () => {
+      // LIMPA O LOCALSTORAGE DA SEMANA INTEGRADORA ANTES DE SAIR
+      if (user) {
+          localStorage.removeItem(`integrator_week_answers_${user.id}`);
+      }
+      supabase.auth.signOut();
+  };
+
+  const handleSelectSubject = (subject) => {
+    // LÓGICA ATUALIZADA PARA A SEMANA INTEGRADORA
+    if (subject.name.toLowerCase().trim() === 'semana integradora') {
+        setCurrentSubjectId(subject.id);
+        setView('integrator_week');
+    } else {
+        setCurrentSubjectId(subject.id);
+        setView('subject');
+    }
+  };
   const handleSelectSummary = (summary) => {
     setCurrentSummaryId(summary.id);
     setView('summary');
@@ -2236,6 +2441,8 @@ const App = () => {
         return <SummaryListView subject={currentSubject} summaries={summariesForCurrentSubject} onSelectSummary={handleSelectSummary} onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }} onEditSummary={(s) => { setEditingSummary(s); setSummaryModalOpen(true); }} onDeleteSummary={handleDeleteSummary} user={user} completedSummaries={completedSummaries} onAISplit={() => setAISplitterModalOpen(true)} onReorderSummaries={handleReorderSummaries} onGenerateFlashcardsForAll={() => generateForAll('flashcards')} onGenerateQuizForAll={() => generateForAll('questions')} isBatchLoading={isBatchLoading} batchLoadingMessage={batchLoadingMessage}/>;
       case 'summary':
         return <SummaryDetailView summary={currentSummary} subject={currentSubject} onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }} onDelete={() => handleDeleteSummary(currentSummary.id)} onGenerateQuiz={handleGenerateQuiz} onToggleComplete={handleToggleComplete} isCompleted={completedSummaries.includes(currentSummary.id)} onGetExplanation={handleGetExplanation} user={user} onAIUpdate={() => setAIUpdateModalOpen(true)} onGenerateFlashcards={handleGenerateFlashcards} />;
+      case 'integrator_week':
+        return <IntegratorWeekView subject={currentSubject} allSubjects={subjects} user={user} />;
       case 'admin':
         return <AdminPanel onBack={handleBackToDashboard} />;
       default:
@@ -2245,8 +2452,9 @@ const App = () => {
 
   const breadcrumbPaths = useMemo(() => {
       const paths = [{ name: 'Início', onClick: handleBackToDashboard }];
-      if (view === 'subject' && currentSubject) paths.push({ name: currentSubject.name, onClick: () => {} });
-      else if (view === 'summary' && currentSubject && currentSummary) {
+      if ((view === 'subject' || view === 'integrator_week') && currentSubject) {
+          paths.push({ name: currentSubject.name, onClick: () => {} });
+      } else if (view === 'summary' && currentSubject && currentSummary) {
           paths.push({ name: currentSubject.name, onClick: handleBackToSubject });
           paths.push({ name: currentSummary.title, onClick: () => {} });
       }
