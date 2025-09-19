@@ -2068,124 +2068,82 @@ const App = () => {
   };
 
   // ==================================================================
-  // BLOCO DE useEffects DE AUTENTICAÇÃO E SESSÃO ATUALIZADO
+  // BLOCO DE useEffects DE AUTENTICAÇÃO E INICIALIZAÇÃO ATUALIZADO
   // ==================================================================
   useEffect(() => {
-    // Busca os períodos disponíveis uma única vez
+    // 1. Apenas busca a sessão inicial uma vez para evitar piscar a tela de login
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false); // Finaliza o loading principal aqui
+    });
+
+    // 2. O listener agora SÓ atualiza o estado da sessão.
+    //    Ele não dispara mais a busca de dados diretamente.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+      }
+    );
+
+    // 3. Busca os períodos disponíveis
     const fetchTerms = async () => {
         const { data } = await supabase.from('terms').select('*').order('id');
         setTerms(data || []);
     };
     fetchTerms();
 
-    // Listener de autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        // LÓGICA DE SESSÃO ÚNICA: "O ÚLTIMO LOGIN VENCE"
-        // Se for um login bem-sucedido, cria e armazena o ID da nova sessão.
-        if (event === 'SIGNED_IN' && session) {
-            const newSessionId = crypto.randomUUID();
-            localStorage.setItem('active_session_id', newSessionId);
-            await supabase
-                .from('profiles')
-                .update({ active_session_id: newSessionId })
-                .eq('id', session.user.id);
-        }
-
-        // Se o usuário deslogar, limpa o ID da sessão local.
-        if (event === 'SIGNED_OUT') {
-            localStorage.removeItem('active_session_id');
-        }
-
-        setSession(session);
-      }
-    );
-
     return () => subscription.unsubscribe();
   }, []);
 
-
-  // useEffect que reage à MUDANÇA na sessão para carregar dados e verificar a sessão ativa
+  // NOVO useEffect: Reage à MUDANÇA na sessão para carregar os dados do app
   useEffect(() => {
-    // Canal de comunicação em tempo real
-    let realtimeChannel;
+    // Roda se uma SESSÃO existe, mas o PERFIL do usuário ainda não foi carregado na app
+    if (session && !user) {
+      const setupUserAndFetchData = async () => {
+        setLoading(true); // Mostra um loading enquanto busca os dados do usuário
+        try {
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
 
-    const setupUserAndFetchData = async () => {
-        if (session && !user) {
-            setLoading(true);
-            try {
-                const { data: profileData, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', session.user.id)
-                    .single();
+          if (profileError) throw profileError;
 
-                if (profileError) throw profileError;
+          const fullUser = { ...session.user, ...profileData };
+          setUser(fullUser);
 
-                // VERIFICAÇÃO DE SESSÃO NA ENTRADA: Compara o ID do banco com o local
-                const localSessionId = localStorage.getItem('active_session_id');
-                // Se não houver ID local ou se for diferente do banco, algo está errado.
-                if (!localSessionId || profileData.active_session_id !== localSessionId) {
-                    alert("Sua conta foi acessada em outro dispositivo. Esta sessão será encerrada.");
-                    supabase.auth.signOut();
-                    setLoading(false);
-                    return; // Interrompe a execução
-                }
+          if (fullUser.status === 'active') {
+            // O incremento de login e a busca de dados agora acontecem AQUI.
+            // Isso só roda uma vez por login real.
+            await supabase.rpc('increment_login_count');
+            await fetchUserProgress(session.user.id);
 
-                const fullUser = { ...session.user, ...profileData };
-                setUser(fullUser);
-
-                if (fullUser.status === 'active') {
-                    await supabase.rpc('increment_login_count');
-                    await fetchUserProgress(session.user.id);
-
-                    if (fullUser.role === 'admin') {
-                        await fetchAppData(null, 'admin');
-                    } else if (fullUser.term_id) {
-                        await fetchAppData(fullUser.term_id, fullUser.role);
-                    }
-
-                    // LISTENER EM TEMPO REAL: Detecta logins em outros dispositivos
-                    realtimeChannel = supabase.channel(`profile-changes:${fullUser.id}`)
-                      .on('postgres_changes',
-                          { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${fullUser.id}` },
-                          (payload) => {
-                              const newDbSessionId = payload.new.active_session_id;
-                              const currentLocalSessionId = localStorage.getItem('active_session_id');
-                              
-                              // Se o ID no banco mudou e é diferente do ID local, força o logout.
-                              if (newDbSessionId && newDbSessionId !== currentLocalSessionId) {
-                                  alert("Sua conta foi acessada em outro dispositivo. Esta sessão será encerrada.");
-                                  if(realtimeChannel) supabase.removeChannel(realtimeChannel); // Remove o listener antes de deslogar
-                                  supabase.auth.signOut();
-                              }
-                          }
-                      ).subscribe();
-
-                }
-            } catch (error) {
-                console.error("Falha ao configurar o usuário e buscar dados:", error);
-                supabase.auth.signOut();
-            } finally {
-                setLoading(false);
+            if (fullUser.role === 'admin') {
+              await fetchAppData(null, 'admin');
+            } else if (fullUser.term_id) {
+              await fetchAppData(fullUser.term_id, fullUser.role);
             }
-        } else if (!session && user) {
-            setUser(null);
-            setSubjects([]);
-            setSummaries([]);
-            setCompletedSummaries([]);
-            setView('dashboard');
+          }
+        } catch (error) {
+           console.error("Falha ao configurar o usuário e buscar dados:", error);
+           // Em caso de erro, deslogamos para evitar um estado inconsistente
+           supabase.auth.signOut();
+        } finally {
+            setLoading(false);
         }
-    };
+      };
 
-    setupUserAndFetchData();
-
-    // Função de limpeza para remover o listener quando o componente for desmontado ou o usuário mudar
-    return () => {
-        if (realtimeChannel) {
-            supabase.removeChannel(realtimeChannel);
-        }
-    };
+      setupUserAndFetchData();
+    }
+    // Roda se a SESSÃO foi encerrada (logout)
+    else if (!session && user) {
+        setUser(null);
+        setSubjects([]);
+        setSummaries([]);
+        setCompletedSummaries([]);
+        setView('dashboard'); // Volta para a tela inicial
+    }
   }, [session, user]); // Depende da sessão e do usuário
 
   // useEffect para carregar TODOS os resumos em segundo plano APÓS a UI principal estar visível.
@@ -2245,14 +2203,11 @@ const App = () => {
     }
   }, [lastViewed, user]);
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
       if (user) {
+          // Limpa o storage da semana integradora ao deslogar
           localStorage.removeItem(`integrator_week_answers_${user.id}`);
           localStorage.removeItem(`integrator_week_questions_${user.id}`);
-          localStorage.removeItem('active_session_id'); // Limpa o ID da sessão local
-          
-          // Define o ID da sessão como nulo no banco de dados ANTES de deslogar
-          await supabase.from('profiles').update({ active_session_id: null }).eq('id', user.id);
       }
       supabase.auth.signOut();
   };
@@ -2602,7 +2557,7 @@ const App = () => {
       case 'admin':
         return <AdminPanel onBack={handleBackToDashboard} />;
       default:
-        return <div className="loader-container"><div className="loader"></div></div>;
+        return <div>Carregando...</div>;
     }
   };
 
@@ -2617,7 +2572,7 @@ const App = () => {
       return paths;
   }, [view, currentSubject, currentSummary]);
 
-  const showHeader = session && user && user.status === 'active' && view !== 'dashboard' && view !== 'admin';
+  const showHeader = user && user.status === 'active' && view !== 'dashboard' && view !== 'admin';
 
   return (
     <>
