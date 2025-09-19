@@ -225,18 +225,13 @@ const identifyTitlesSchema = {
 
 // --- COMPONENTES ---
 
-// NOVO: Componente para a "Semana Integradora"
 const IntegratorWeekView = ({ subject, allSubjects, user }) => {
-    // 1. Crie uma chave de storage única para as perguntas e respostas
     const questionsStorageKey = `integrator_week_questions_${user.id}`;
     const answersStorageKey = `integrator_week_answers_${user.id}`;
 
-    // 2. Ao inicializar o estado, tente carregar do localStorage
     const [questions, setQuestions] = useState(() => {
         try {
             const savedQuestions = localStorage.getItem(questionsStorageKey);
-            // Se houver perguntas salvas e não for uma string vazia, use-as.
-            // Senão, comece com uma pergunta em branco.
             return savedQuestions && savedQuestions.length > 2
                    ? JSON.parse(savedQuestions)
                    : [{ id: 1, text: '', subject: '' }];
@@ -250,7 +245,6 @@ const IntegratorWeekView = ({ subject, allSubjects, user }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // 3. Crie um useEffect que salva as perguntas sempre que elas mudam
     useEffect(() => {
         try {
             localStorage.setItem(questionsStorageKey, JSON.stringify(questions));
@@ -259,7 +253,6 @@ const IntegratorWeekView = ({ subject, allSubjects, user }) => {
         }
     }, [questions, questionsStorageKey]);
 
-    // Carrega respostas do localStorage ao iniciar
     useEffect(() => {
         try {
             const savedAnswers = localStorage.getItem(answersStorageKey);
@@ -297,7 +290,6 @@ const IntegratorWeekView = ({ subject, allSubjects, user }) => {
         setGeneratedAnswers([]);
 
         try {
-            // --- PROMPT APRIMORADO E MAIS ROBUSTO ---
             const prompt = `
 **PAPEL DE SISTEMA:** Você é um especialista em medicina e sua única tarefa é gerar respostas factuais e acadêmicas para as perguntas enviadas, seguindo estritamente o formato solicitado.
 
@@ -321,7 +313,6 @@ ${JSON.stringify(validQuestions.map(q => ({ pergunta: q.text, materia: q.subject
             setGeneratedAnswers(parsedJson.answers);
             localStorage.setItem(answersStorageKey, JSON.stringify(parsedJson.answers));
 
-            // SUCESSO: Limpe as perguntas do storage e resete o estado para o padrão
             localStorage.removeItem(questionsStorageKey);
             setQuestions([{ id: 1, text: '', subject: '' }]);
 
@@ -333,7 +324,6 @@ ${JSON.stringify(validQuestions.map(q => ({ pergunta: q.text, materia: q.subject
         }
     };
 
-    // Filtra a própria disciplina "Semana Integradora" da lista de matérias
     const availableSubjects = allSubjects.filter(s => s.id !== subject.id);
 
     return (
@@ -418,17 +408,14 @@ const QuizView = ({ questions, onGetExplanation }) => {
     const [loadingExplanation, setLoadingExplanation] = useState(null);
 
     const handleAnswer = async (questionIndex, alternativeIndex) => {
-        // Não faz nada se a questão já foi respondida
         if (answers[questionIndex] !== undefined) return;
 
-        // Marca a alternativa selecionada pelo usuário
         setAnswers(prev => ({ ...prev, [questionIndex]: alternativeIndex }));
 
         const question = questions[questionIndex];
         const isCorrect = question.correctAlternativeIndex === alternativeIndex;
 
         if (isCorrect) {
-            // Se acertou, busca uma nova explicação dinâmica da IA (comportamento original)
             setLoadingExplanation(questionIndex);
             try {
                 const explanationText = await onGetExplanation(
@@ -438,14 +425,11 @@ const QuizView = ({ questions, onGetExplanation }) => {
                 setExplanations(prev => ({ ...prev, [questionIndex]: explanationText }));
             } catch (error) {
                 console.error("Failed to get explanation:", error);
-                // Se a busca falhar, usa a explicação padrão que já existe
                 setExplanations(prev => ({...prev, [questionIndex]: question.explanation || "Não foi possível carregar a explicação."}));
             } finally {
                 setLoadingExplanation(null);
             }
         } else {
-            // --- CORREÇÃO APLICADA AQUI ---
-            // Se errou, simplesmente usa a explicação que já veio com a questão.
             setExplanations(prev => ({ ...prev, [questionIndex]: question.explanation }));
         }
     };
@@ -481,7 +465,6 @@ const QuizView = ({ questions, onGetExplanation }) => {
                                 );
                             })}
                         </div>
-                        {/* Esta parte agora funcionará para acertos e erros */}
                         {isAnswered && explanations[qIndex] && (
                              <div className="explanation-box">
                                  <p><strong>Comentário:</strong></p>
@@ -498,15 +481,8 @@ const QuizView = ({ questions, onGetExplanation }) => {
 
 // --- FUNÇÕES AUXILIARES ---
 const subjectColors = [
-  '#E63946', // Vermelho
-  '#1D3557', // Azul Escuro
-  '#457B9D', // Azul Médio
-  '#2A9D8F', // Verde-azulado
-  '#E76F51', // Laranja
-  '#FFC300', // Amarelo
-  '#6A057F', // Roxo
-  '#E5989B', // Rosa
-  '#008080'  // Verde-petróleo
+  '#E63946', '#1D3557', '#457B9D', '#2A9D8F',
+  '#E76F51', '#FFC300', '#6A057F', '#E5989B', '#008080'
 ];
 const getNewSubjectColor = (existingSubjects) => {
     const usedColors = new Set(existingSubjects.map(s => s.color));
@@ -567,6 +543,7 @@ const Breadcrumbs = ({ paths }) => (
     </nav>
 );
 
+// --- CORRIGIDO: Componente LoginScreen com lógica de sessão única usando localStorage ---
 const LoginScreen = ({ theme, toggleTheme }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -585,18 +562,30 @@ const LoginScreen = ({ theme, toggleTheme }) => {
                 email,
                 password,
             });
-
             if (signUpError) throw signUpError;
-
             const mercadoPagoCheckoutUrl = 'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=fa9742c919ac44d793ad723d66d9feae';
             window.location.href = mercadoPagoCheckoutUrl;
 
         } else {
-            const { error: signInError } = await supabase.auth.signInWithPassword({
+            const { data, error: signInError } = await supabase.auth.signInWithPassword({
                 email,
                 password,
             });
             if (signInError) throw signInError;
+
+            if (data.user) {
+                const newSessionId = crypto.randomUUID();
+                localStorage.setItem('active_session_id', newSessionId);
+
+                const { error: updateError } = await supabase
+                    .from('profiles')
+                    .update({ active_session_id: newSessionId })
+                    .eq('id', data.user.id);
+
+                if (updateError) {
+                    console.error("Falha ao definir a sessão ativa:", updateError.message);
+                }
+            }
         }
     } catch (error) {
         setError(error.message || "Ocorreu um erro. Tente novamente.");
@@ -1128,7 +1117,6 @@ const AdminPanel = ({ onBack }) => {
         const fetchUsers = async () => {
             setLoadingUsers(true);
             try {
-                // ALTERADO: Adicionado 'login_count' à consulta
                 const { data, error } = await supabase.from('profiles').select('id, email, role, status, login_count').order('email');
                 if (error) throw error;
                 setUsers(data || []);
@@ -1160,7 +1148,6 @@ const AdminPanel = ({ onBack }) => {
                 <h2>Gerenciamento de Usuários</h2>
                  <table className="admin-table">
                     <thead>
-                        {/* ALTERADO: Adicionada a coluna 'Nº de Acessos' */}
                         <tr>
                             <th>Email</th>
                             <th>Status</th>
@@ -1177,7 +1164,6 @@ const AdminPanel = ({ onBack }) => {
                                         {user.status === 'pending_approval' ? 'Pendente' : user.status === 'active' ? 'Ativo' : user.status === 'blocked' ? 'Bloqueado' : 'Indefinido'}
                                     </span>
                                 </td>
-                                {/* NOVO: Célula para exibir a contagem de acessos */}
                                 <td>{user.login_count || 0}</td>
                                 <td className="user-actions">
                                     {user.status !== 'active' && <button className="btn btn-sm btn-success" onClick={() => handleUpdateUserStatus(user.id, 'active')}>Liberar</button>}
@@ -1211,7 +1197,6 @@ const AdminPanel = ({ onBack }) => {
 };
 
 
-// ALTERADO: Adicionado novas props para os botões e estados de loading
 const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, completedSummaries, onNavigateToAdmin, onGenerateFlashcardsForAll, onGenerateQuizForAll, isBatchLoading, batchLoadingMessage }) => {
   const isSearching = searchQuery.trim() !== '';
   const isAdminOrAmbassador = user.role === 'admin' || user.role === 'embaixador';
@@ -1269,7 +1254,6 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
             </div>
           )}
 
-          {/* NOVO: Container para os botões de ação em lote */}
           {isAdminOrAmbassador && (
             <div className="dashboard-global-actions">
               {isBatchLoading ? (
@@ -1328,7 +1312,6 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
     useEffect(() => {
         if (isOpen) {
             setName(subject?.name || '');
-            // APENAS ADMIN seleciona período, embaixador usa o seu próprio
             setSelectedTermId(subject?.term_id || (user.role === 'admin' ? '' : user?.term_id));
             setColor(subject?.color || subjectColors[0]);
         }
@@ -1339,7 +1322,6 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
     const handleSubmit = (e) => {
         e.preventDefault();
 
-        // A verificação de período só se aplica ao admin, pois ele é o único que pode escolher
         if (user.role === 'admin' && !selectedTermId) {
             alert('Por favor, selecione um período para esta disciplina.');
             return;
@@ -1359,7 +1341,6 @@ const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user
                         <input id="subject-name" className="input" type="text" value={name} onChange={e => setName(e.target.value)} required />
                     </div>
 
-                    {/* Seletor de período visível APENAS para o admin */}
                     {user.role === 'admin' && (
                         <div className="form-group">
                             <label htmlFor="term-select-subject">Período</label>
@@ -1771,13 +1752,6 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
 
     return (
         <div className="summary-detail-layout">
-            {/*
-              INÍCIO DA CORREÇÃO DE ESTILO
-              Este bloco de CSS resolve o problema de layout onde um título (h2)
-              e um subtítulo (h3) aparecem em linhas separadas. As regras abaixo
-              garantem que, quando um h3 segue um h2, eles sejam exibidos na mesma
-              linha e com as bordas arredondadas ajustadas para parecerem um único elemento.
-            */}
             <style>{`
                 .summary-content h2:has(+ h3) {
                   display: inline-block;
@@ -2038,10 +2012,43 @@ const App = () => {
   const [batchLoadingMessage, setBatchLoadingMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTermForAdmin, setSelectedTermForAdmin] = useState(null);
-
-  // State para controlar o carregamento dos resumos em segundo plano
   const [areSummariesLoaded, setAreSummariesLoaded] = useState(false);
 
+  // --- CORRIGIDO: useEffect para escutar mudanças de sessão em tempo real ---
+  useEffect(() => {
+    if (user) {
+      const localSessionId = localStorage.getItem('active_session_id');
+
+      if (!localSessionId) {
+          return;
+      }
+
+      const channel = supabase.channel(`profile-updates:${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'profiles',
+            filter: `id=eq.${user.id}`
+          },
+          (payload) => {
+            const newRemoteSessionId = payload.new.active_session_id;
+
+            if (newRemoteSessionId && newRemoteSessionId !== localSessionId) {
+              supabase.removeChannel(channel);
+              alert("Sua conta foi acessada em um novo dispositivo. Esta sessão será encerrada.");
+              supabase.auth.signOut();
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [user]);
 
   const fetchUserProgress = async (userId) => {
     const { data, error } = await supabase.from('user_summary_progress').select('summary_id').eq('user_id', userId);
@@ -2049,17 +2056,13 @@ const App = () => {
     else setCompletedSummaries(data.map(item => item.summary_id));
   };
 
-  // OTIMIZAÇÃO: Esta função agora carrega apenas as disciplinas, tornando o boot inicial muito mais rápido.
   const fetchAppData = async (termId, userRole) => {
-    setAreSummariesLoaded(false); // Reseta o status de carregamento dos resumos
-    setSummaries([]); // Limpa os resumos antigos para evitar mostrar dados de outro usuário/período
-
+    setAreSummariesLoaded(false);
+    setSummaries([]);
     let subjectsQuery = supabase.from('subjects').select('*');
-
     if (userRole !== 'admin') {
       subjectsQuery = subjectsQuery.eq('term_id', termId);
     }
-
     const { data: subjectsData, error: subjectsError } = await subjectsQuery.order('name');
     if (subjectsError) {
         console.error("Erro ao buscar disciplinas:", subjectsError);
@@ -2067,25 +2070,18 @@ const App = () => {
     setSubjects(subjectsData || []);
   };
 
-  // ==================================================================
-  // BLOCO DE useEffects DE AUTENTICAÇÃO E INICIALIZAÇÃO ATUALIZADO
-  // ==================================================================
   useEffect(() => {
-    // 1. Apenas busca a sessão inicial uma vez para evitar piscar a tela de login
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setLoading(false); // Finaliza o loading principal aqui
+      setLoading(false);
     });
 
-    // 2. O listener agora SÓ atualiza o estado da sessão.
-    //    Ele não dispara mais a busca de dados diretamente.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
       }
     );
 
-    // 3. Busca os períodos disponíveis
     const fetchTerms = async () => {
         const { data } = await supabase.from('terms').select('*').order('id');
         setTerms(data || []);
@@ -2095,12 +2091,10 @@ const App = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // NOVO useEffect: Reage à MUDANÇA na sessão para carregar os dados do app
   useEffect(() => {
-    // Roda se uma SESSÃO existe, mas o PERFIL do usuário ainda não foi carregado na app
     if (session && !user) {
       const setupUserAndFetchData = async () => {
-        setLoading(true); // Mostra um loading enquanto busca os dados do usuário
+        setLoading(true);
         try {
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
@@ -2109,16 +2103,12 @@ const App = () => {
             .single();
 
           if (profileError) throw profileError;
-
           const fullUser = { ...session.user, ...profileData };
           setUser(fullUser);
 
           if (fullUser.status === 'active') {
-            // O incremento de login e a busca de dados agora acontecem AQUI.
-            // Isso só roda uma vez por login real.
             await supabase.rpc('increment_login_count');
             await fetchUserProgress(session.user.id);
-
             if (fullUser.role === 'admin') {
               await fetchAppData(null, 'admin');
             } else if (fullUser.term_id) {
@@ -2127,63 +2117,51 @@ const App = () => {
           }
         } catch (error) {
            console.error("Falha ao configurar o usuário e buscar dados:", error);
-           // Em caso de erro, deslogamos para evitar um estado inconsistente
            supabase.auth.signOut();
         } finally {
             setLoading(false);
         }
       };
-
       setupUserAndFetchData();
     }
-    // Roda se a SESSÃO foi encerrada (logout)
     else if (!session && user) {
         setUser(null);
         setSubjects([]);
         setSummaries([]);
         setCompletedSummaries([]);
-        setView('dashboard'); // Volta para a tela inicial
+        setView('dashboard');
     }
-  }, [session, user]); // Depende da sessão e do usuário
+  }, [session, user]);
 
-  // useEffect para carregar TODOS os resumos em segundo plano APÓS a UI principal estar visível.
   useEffect(() => {
     const fetchAllSummariesInBackground = async () => {
-        // Roda apenas se tivermos um usuário, disciplinas carregadas e os resumos ainda não foram buscados
         if (!user || subjects.length === 0 || areSummariesLoaded) return;
-
         try {
             const visibleSubjectIds = subjects.map(s => s.id);
             if (visibleSubjectIds.length === 0) {
                  setAreSummariesLoaded(true);
                  return;
             }
-
             const { data: summariesData, error: summariesError } = await supabase
                 .from('summaries')
                 .select('*')
                 .in('subject_id', visibleSubjectIds)
                 .order('position', { ascending: true });
-
             if (summariesError) throw summariesError;
-
             const parseJsonField = (field, fallback = []) => {
                 if (typeof field === 'string') { try { const parsed = JSON.parse(field); return Array.isArray(parsed) ? parsed : fallback; } catch (e) { return fallback; } }
                 return Array.isArray(field) ? field : fallback;
             };
-
             const processedSummaries = (summariesData || []).map(s => ({ ...s, questions: parseJsonField(s.questions), flashcards: parseJsonField(s.flashcards) }));
             setSummaries(processedSummaries);
         } catch (error) {
             console.error("Erro ao carregar resumos em segundo plano:", error);
         } finally {
-            setAreSummariesLoaded(true); // Marca que os resumos foram carregados (ou a tentativa falhou)
+            setAreSummariesLoaded(true);
         }
     };
-
     fetchAllSummariesInBackground();
   }, [user, subjects, areSummariesLoaded]);
-
 
   useEffect(() => {
     document.body.className = theme === 'light' ? 'light-mode' : '';
@@ -2203,11 +2181,12 @@ const App = () => {
     }
   }, [lastViewed, user]);
 
+  // --- CORRIGIDO: Função handleLogout com limpeza da sessão no localStorage ---
   const handleLogout = () => {
       if (user) {
-          // Limpa o storage da semana integradora ao deslogar
           localStorage.removeItem(`integrator_week_answers_${user.id}`);
           localStorage.removeItem(`integrator_week_questions_${user.id}`);
+          localStorage.removeItem('active_session_id');
       }
       supabase.auth.signOut();
   };
@@ -2472,7 +2451,6 @@ const App = () => {
   }, [subjects, user, selectedTermForAdmin]);
 
   const searchResults = useMemo(() => {
-    // A busca só funciona se os resumos já foram carregados
     if (!areSummariesLoaded) return { subjects: [], summaries: [], allSummaries: [] };
 
     const allSummariesWithSubject = summaries.map(sum => ({ ...sum, subjectName: subjects.find(sub => sub.id === sum.subject_id)?.name || '' }));
