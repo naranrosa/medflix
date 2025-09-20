@@ -402,10 +402,25 @@ ${JSON.stringify(validQuestions.map(q => ({ pergunta: q.text, materia: q.subject
 };
 
 
-const QuizView = ({ questions, onGetExplanation }) => {
+const QuizView = ({ questions, onGetExplanation, summaryId, userId, isMockExam = false }) => {
     const [answers, setAnswers] = useState({});
     const [explanations, setExplanations] = useState({});
     const [loadingExplanation, setLoadingExplanation] = useState(null);
+
+    // --- Lógica para registrar as tentativas do quiz ---
+    const logAttempt = async (question, isCorrect) => {
+        if (isMockExam || !userId || !summaryId) return; // Não registrar tentativas de simulados
+        try {
+            await supabase.from('user_quiz_attempts').upsert({
+                user_id: userId,
+                summary_id: summaryId,
+                question_text: question.questionText,
+                is_correct: isCorrect,
+            }, { onConflict: 'user_id, summary_id, question_text' });
+        } catch (error) {
+            console.error("Erro ao registrar tentativa do quiz:", error);
+        }
+    };
 
     const handleAnswer = async (questionIndex, alternativeIndex) => {
         if (answers[questionIndex] !== undefined) return;
@@ -414,6 +429,8 @@ const QuizView = ({ questions, onGetExplanation }) => {
 
         const question = questions[questionIndex];
         const isCorrect = question.correctAlternativeIndex === alternativeIndex;
+
+        await logAttempt(question, isCorrect);
 
         if (isCorrect) {
             setLoadingExplanation(questionIndex);
@@ -524,6 +541,9 @@ const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24"
 const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
 const SparklesIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L14.39 8.36L21 9.27L16.36 14.14L18.18 21L12 17.27L5.82 21L7.64 14.14L3 9.27L9.61 8.36L12 2z"/></svg>;
 const ListIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
+const CalendarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>;
+const MessageSquareIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>;
+const ClipboardIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>;
 
 
 const Breadcrumbs = ({ paths }) => (
@@ -543,7 +563,6 @@ const Breadcrumbs = ({ paths }) => (
     </nav>
 );
 
-// --- CORRIGIDO: Componente LoginScreen com lógica de sessão única usando localStorage ---
 const LoginScreen = ({ theme, toggleTheme }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -1197,7 +1216,7 @@ const AdminPanel = ({ onBack }) => {
 };
 
 
-const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, completedSummaries, onNavigateToAdmin, onGenerateFlashcardsForAll, onGenerateQuizForAll, isBatchLoading, batchLoadingMessage }) => {
+const Dashboard = ({ user, onLogout, subjects, onSelectSubject, onAddSubject, onEditSubject, onDeleteSubject, theme, toggleTheme, searchQuery, onSearchChange, searchResults, onSelectSummary, lastViewed, completedSummaries, onNavigateToAdmin, onGenerateFlashcardsForAll, onGenerateQuizForAll, isBatchLoading, batchLoadingMessage, onNavigateToSchedules }) => {
   const isSearching = searchQuery.trim() !== '';
   const isAdminOrAmbassador = user.role === 'admin' || user.role === 'embaixador';
 
@@ -1206,6 +1225,7 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
       <div className="dashboard-header">
         <h1>{isSearching ? "Resultados da Busca" : "Início"}</h1>
         <div className="header-actions">
+            {isAdminOrAmbassador && <button className="btn btn-secondary" onClick={onNavigateToSchedules}>Agendamentos</button>}
             {user.role === 'admin' && <button className="btn btn-primary" onClick={onNavigateToAdmin}>Painel Admin</button>}
             <ThemeToggle theme={theme} toggleTheme={toggleTheme}/>
             <button className="btn btn-secondary" onClick={onLogout}>Sair</button>
@@ -1304,7 +1324,8 @@ const Dashboard = ({ user, termName, onLogout, subjects, onSelectSubject, onAddS
     </div>
   );
 };
-const SubjectModal = ({ isOpen, onClose, onSave, subject, existingSubjects, user, terms }) => {
+
+const SubjectModal = ({ isOpen, onClose, onSave, subject, user, terms }) => {
     const [name, setName] = useState('');
     const [selectedTermId, setSelectedTermId] = useState('');
     const [color, setColor] = useState('');
@@ -1477,7 +1498,8 @@ const SummaryModal = ({ isOpen, onClose, onSave, summary, subjectId }) => {
     );
 };
 
-const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, onEditSummary, onDeleteSummary, user, completedSummaries, onAISplit, onReorderSummaries, onGenerateFlashcardsForAll, onGenerateQuizForAll, isBatchLoading, batchLoadingMessage }) => {
+// --- ATUALIZADO: `SummaryListView` agora inclui o botão para abrir o modal do simulado ---
+const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, onEditSummary, onDeleteSummary, user, completedSummaries, onAISplit, onReorderSummaries, onGenerateFlashcardsForAll, onGenerateQuizForAll, isBatchLoading, batchLoadingMessage, onOpenMockExamModal }) => {
     const handleDragEnd = (result) => {
         const { destination, source } = result;
         if (!destination || (destination.droppableId === source.droppableId && destination.index === source.index)) {
@@ -1510,6 +1532,12 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
                         </div>
                     )
                 )}
+            </div>
+
+            <div className="dashboard-main-actions">
+                <button className="btn btn-primary" onClick={onOpenMockExamModal}>
+                    <ClipboardIcon /> Gerar Simulado da Disciplina
+                </button>
             </div>
 
             {summaries.length > 0 ? (
@@ -1565,78 +1593,147 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
     );
 };
 
-
-const FlashcardView = ({ flashcards, summaryId }) => {
-    const [deck, setDeck] = useState([]);
+const FlashcardView = ({ flashcards, summaryId, userId }) => {
+    const [srsData, setSrsData] = useState(null);
+    const [reviewDeck, setReviewDeck] = useState([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
     const [isFinished, setIsFinished] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [studyMode, setStudyMode] = useState(null); // 'review' or 'studyAll'
+
+    const calculateSrs = (srsRecord, knows) => {
+        let { interval, ease_factor } = srsRecord || { interval: 0, ease_factor: 2.5 };
+
+        if (knows) {
+            if (interval === 0) interval = 1;
+            else if (interval === 1) interval = 6;
+            else interval = Math.round(interval * ease_factor);
+            ease_factor += 0.1;
+        } else {
+            interval = 1;
+            ease_factor = Math.max(1.3, ease_factor - 0.2);
+        }
+
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + interval);
+
+        return { interval, ease_factor, due_date: dueDate.toISOString() };
+    };
 
     useEffect(() => {
-        const safeFlashcards = Array.isArray(flashcards) ? flashcards : [];
-        setDeck(safeFlashcards.map(f => ({...f, id: Math.random()})).sort(() => Math.random() - 0.5));
+        const initializeDeck = async () => {
+            if (!studyMode) return;
+            setIsLoading(true);
+            const { data, error } = await supabase
+                .from('user_flashcard_srs')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('summary_id', summaryId);
+
+            if (error) {
+                console.error("Erro ao buscar dados SRS:", error);
+            } else {
+                const srsMap = new Map(data.map(item => [item.flashcard_front, item]));
+                setSrsData(srsMap);
+
+                if (studyMode === 'review') {
+                    const today = new Date();
+                    today.setHours(23, 59, 59, 999); // Considerar até o final do dia
+                    const dueCards = flashcards.filter(card => {
+                        const record = srsMap.get(card.front);
+                        return !record || new Date(record.due_date) <= today;
+                    });
+                    setReviewDeck(dueCards);
+                } else { // studyAll
+                    setReviewDeck([...flashcards].sort(() => Math.random() - 0.5));
+                }
+            }
+            setIsLoading(false);
+        };
+
+        if (userId && summaryId) {
+            initializeDeck();
+        }
+    }, [flashcards, summaryId, userId, studyMode]);
+
+    const startSession = (mode) => {
         setCurrentIndex(0);
         setIsFlipped(false);
         setIsFinished(false);
-    }, [flashcards, summaryId]);
+        setStudyMode(mode);
+    };
 
-    const handleFlip = () => setIsFlipped(prev => !prev);
+    const handleAnswer = async (knows) => {
+        const currentCard = reviewDeck[currentIndex];
+        const currentSrsRecord = srsData?.get(currentCard.front);
+        const newSrsData = calculateSrs(currentSrsRecord, knows);
 
-    const processAnswer = (knows) => {
+        await supabase.from('user_flashcard_srs').upsert({
+            user_id: userId,
+            summary_id: summaryId,
+            flashcard_front: currentCard.front,
+            ...newSrsData,
+        });
+
+        setSrsData(prev => new Map(prev).set(currentCard.front, newSrsData));
+
         setIsFlipped(false);
-
         setTimeout(() => {
-            if (knows) {
-                const newDeck = deck.filter((_, index) => index !== currentIndex);
-                if (newDeck.length === 0) {
-                    setIsFinished(true);
-                } else {
-                    setDeck(newDeck);
-                    setCurrentIndex(currentIndex % newDeck.length);
-                }
+            if (currentIndex + 1 >= reviewDeck.length) {
+                setIsFinished(true);
             } else {
-                setCurrentIndex((currentIndex + 1) % deck.length);
+                setCurrentIndex(prev => prev + 1);
             }
         }, 300);
     };
 
-    const handleAnswer = (knows) => {
-        if (!isFlipped) {
-            setIsFlipped(true);
-            setTimeout(() => processAnswer(knows), 1000);
-        } else {
-            processAnswer(knows);
-        }
-    };
+    const handleFlip = () => setIsFlipped(prev => !prev);
 
-    const handleReset = () => {
-        const safeFlashcards = Array.isArray(flashcards) ? flashcards : [];
-        setDeck(safeFlashcards.map(f => ({...f, id: Math.random()})).sort(() => Math.random() - 0.5));
-        setCurrentIndex(0);
-        setIsFlipped(false);
-        setIsFinished(false);
-    };
+    if (!studyMode) {
+        if (isLoading) return <div className="loader-container"><div className="loader"></div></div>;
+        return (
+            <div className="flashcard-container finished-deck">
+                <h2>Modo de Estudo</h2>
+                <p>Você tem <strong>{reviewDeck.length}</strong> card(s) para revisar hoje.</p>
+                <div className="flashcard-mode-selection">
+                    <button className="btn btn-primary" onClick={() => startSession('review')} disabled={reviewDeck.length === 0}>
+                        Revisar Cards de Hoje
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => startSession('studyAll')}>
+                        Estudar Baralho Completo
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     if (isFinished) {
         return (
             <div className="flashcard-container finished-deck">
                 <h2>Parabéns!</h2>
-                <p>Você revisou todos os flashcards.</p>
-                <button className="btn btn-primary" onClick={handleReset}>Estudar Novamente</button>
+                <p>Você concluiu a sessão de estudos.</p>
+                <button className="btn btn-primary" onClick={() => setStudyMode(null)}>Voltar</button>
             </div>
         );
     }
 
-    if (!deck || deck.length === 0) {
-        return <div className="flashcard-container"><p>Nenhum flashcard para exibir.</p></div>;
+    if (!reviewDeck || reviewDeck.length === 0) {
+        return (
+             <div className="flashcard-container finished-deck">
+                <h2>Tudo em dia!</h2>
+                <p>Você não tem cards para revisar hoje.</p>
+                <button className="btn btn-primary" onClick={() => setStudyMode(null)}>Voltar</button>
+            </div>
+        );
     }
 
-    const currentCard = deck[currentIndex];
+    const currentCard = reviewDeck[currentIndex];
 
     return (
         <div className="flashcard-container">
             <div className="flashcard-progress">
-                <span>{deck.length} restantes</span>
+                <span>{currentIndex + 1} / {reviewDeck.length}</span>
             </div>
             <div className={`flashcard ${isFlipped ? 'is-flipped' : ''}`} onClick={handleFlip}>
                 <div className="flashcard-inner">
@@ -1717,14 +1814,112 @@ const GoogleDrivePlayer = ({ url }) => {
     );
 };
 
-const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate, onGenerateFlashcards }) => {
+const AnnotationsPanel = ({ summaryId, userId, refreshKey }) => {
+    const [annotations, setAnnotations] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchAnnotations = async () => {
+            setIsLoading(true);
+            const { data, error } = await supabase
+                .from('user_annotations')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('summary_id', summaryId)
+                .order('created_at', { ascending: false });
+
+            if (error) console.error("Erro ao buscar anotações:", error);
+            else setAnnotations(data);
+            setIsLoading(false);
+        };
+        fetchAnnotations();
+    }, [summaryId, userId, refreshKey]);
+
+    const deleteAnnotation = async (id) => {
+        if (!window.confirm("Tem certeza que deseja apagar esta anotação?")) return;
+
+        await supabase.from('user_annotations').delete().eq('id', id);
+        setAnnotations(prev => prev.filter(a => a.id !== id));
+    };
+
+    if (isLoading) return <div className="loader-sm"></div>;
+
+    return (
+        <aside className="annotations-panel">
+            <h4>Minhas Anotações</h4>
+            {annotations.length > 0 ? (
+                <ul>
+                    {annotations.map(anno => (
+                        <li key={anno.id} className="annotation-item">
+                            {anno.highlighted_text && (
+                                <blockquote className="highlighted-quote">
+                                    {anno.highlighted_text}
+                                </blockquote>
+                            )}
+                            <p className="note-content">{anno.note_content}</p>
+                            <div className="annotation-actions">
+                                <span className="annotation-date">{new Date(anno.created_at).toLocaleDateString()}</span>
+                                <IconButton onClick={() => deleteAnnotation(anno.id)} className="danger-icon-btn"><DeleteIcon /></IconButton>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <p className="empty-annotations">Selecione um texto no resumo para criar sua primeira anotação.</p>
+            )}
+        </aside>
+    );
+};
+
+
+const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate, onGenerateFlashcards, onScheduleClass }) => {
     const [activeTab, setActiveTab] = useState('summary');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isTocVisible, setIsTocVisible] = useState(true);
+    const [isAnnotationsPanelVisible, setAnnotationsPanelVisible] = useState(false);
+    const [annotationRefreshKey, setAnnotationRefreshKey] = useState(0);
+
+    const [selection, setSelection] = useState({ text: '', x: 0, y: 0 });
+    const summaryContentRef = useRef(null);
+    const [isAnnotationModalOpen, setAnnotationModalOpen] = useState(false);
+
+    const handleMouseUp = () => {
+        const currentSelection = window.getSelection();
+        const selectedText = currentSelection?.toString().trim();
+        if (selectedText && selectedText.length > 5) { // Evita pop-ups para cliques simples
+            const rect = currentSelection.getRangeAt(0).getBoundingClientRect();
+            setSelection({
+                text: selectedText,
+                x: rect.left + window.scrollX,
+                y: rect.bottom + window.scrollY + 5
+            });
+        } else {
+            setSelection({ text: '', x: 0, y: 0 });
+        }
+    };
+
+    const handleSaveAnnotation = async (noteContent) => {
+        const { error } = await supabase.from('user_annotations').insert({
+            user_id: user.id,
+            summary_id: summary.id,
+            highlighted_text: selection.text,
+            note_content: noteContent
+        });
+        if (error) {
+            alert("Falha ao salvar anotação.");
+        } else {
+            setAnnotationModalOpen(false);
+            setSelection({ text: '', x: 0, y: 0 });
+            setAnnotationRefreshKey(prev => prev + 1); // Força a atualização do painel
+        }
+    };
+
     const isAdminOrAmbassador = user.role === 'admin' || user.role === 'embaixador';
+    const isStudent = user.role !== 'admin' && user.role !== 'embaixador';
 
     useEffect(() => {
         setIsTocVisible(true);
+        setAnnotationsPanelVisible(false);
     }, [summary]);
 
     const handleGenerateQuiz = async () => {
@@ -1752,6 +1947,19 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
 
     return (
         <div className="summary-detail-layout">
+             {isStudent && (
+                <button className="fab" onClick={onScheduleClass}>
+                    <CalendarIcon />
+                    Agendar Aula
+                </button>
+            )}
+             {isAnnotationModalOpen && (
+                <AnnotationModal
+                    onClose={() => setAnnotationModalOpen(false)}
+                    onSave={handleSaveAnnotation}
+                    highlightedText={selection.text}
+                />
+            )}
             <style>{`
                 .summary-content h2:has(+ h3) {
                   display: inline-block;
@@ -1768,12 +1976,19 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
                 }
             `}</style>
             {activeTab === 'summary' && isTocVisible && <TableOfContents content={summary.content} />}
+            {activeTab === 'summary' && isAnnotationsPanelVisible && <AnnotationsPanel summaryId={summary.id} userId={user.id} refreshKey={annotationRefreshKey} />}
+
             <div className="summary-detail-view">
                 <div className="summary-header">
                     {activeTab === 'summary' && (
-                        <IconButton onClick={() => setIsTocVisible(!isTocVisible)} className="toc-toggle-btn">
-                            <ListIcon />
-                        </IconButton>
+                        <div className="summary-view-toggles">
+                            <IconButton onClick={() => setIsTocVisible(p => !p)} className={`toc-toggle-btn ${isTocVisible ? 'active' : ''}`}>
+                                <ListIcon />
+                            </IconButton>
+                             <IconButton onClick={() => setAnnotationsPanelVisible(p => !p)} className={`toc-toggle-btn ${isAnnotationsPanelVisible ? 'active' : ''}`}>
+                                <ClipboardIcon />
+                            </IconButton>
+                        </div>
                     )}
                     <h1 className="summary-detail-title">{summary.title}</h1>
                     <div className="summary-detail-actions">
@@ -1806,11 +2021,22 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
                 </nav>
 
                 <div className="tab-content">
+                     {selection.text && activeTab === 'summary' && (
+                        <button
+                            className="annotation-creator-btn"
+                            style={{ top: selection.y, left: selection.x }}
+                            onClick={() => setAnnotationModalOpen(true)}
+                        >
+                            Criar Anotação
+                        </button>
+                     )}
                     <div
                         id="tab-panel-summary"
                         role="tabpanel"
                         className={`summary-content ${activeTab === 'summary' ? '' : 'hidden'}`}
                         style={{ '--subject-color': subject?.color || '#6c757d' }}
+                        ref={summaryContentRef}
+                        onMouseUp={handleMouseUp}
                     >
                             <div dangerouslySetInnerHTML={{ __html: summary.content }} />
                     </div>
@@ -1823,7 +2049,7 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
                         <ProtectedContent>
                             {(summary.flashcards?.length > 0) ? (
                                 <>
-                                    <FlashcardView flashcards={summary.flashcards} summaryId={summary.id} />
+                                    <FlashcardView flashcards={summary.flashcards} summaryId={summary.id} userId={user.id} />
                                     {isAdminOrAmbassador && (
                                         <div className="update-content-container">
                                              <button className="btn btn-secondary" onClick={handleGenerateFlashcards} disabled={isGenerating}>
@@ -1849,7 +2075,7 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
                         <ProtectedContent>
                             {summary.questions?.length > 0 ? (
                                  <>
-                                    <QuizView questions={summary.questions} onGetExplanation={onGetExplanation} />
+                                    <QuizView questions={summary.questions} onGetExplanation={onGetExplanation} summaryId={summary.id} userId={user.id} />
                                     {isAdminOrAmbassador && (
                                         <div className="update-content-container">
                                             <button className="btn btn-secondary" onClick={handleGenerateQuiz} disabled={isGenerating}>
@@ -1917,7 +2143,6 @@ const TermSelector = ({ user, terms, onTermUpdate }) => {
     );
 };
 
-// --- TELAS DE STATUS DO USUÁRIO ---
 const PendingApprovalScreen = () => (
     <div className="login-screen">
         <div className="login-card">
@@ -1958,7 +2183,6 @@ const BlockedScreen = () => (
     </div>
 );
 
-// --- COMPONENTE DE PROTEÇÃO DE CONTEÚDO ---
 const ProtectedContent = ({ children }) => {
   const preventActions = (e) => e.preventDefault();
   const wrapperRef = useRef(null);
@@ -1982,10 +2206,435 @@ const ProtectedContent = ({ children }) => {
   return <div ref={wrapperRef}>{children}</div>;
 };
 
+const ScheduleRequestModal = ({ isOpen, onClose, summary, user, onMessageSent }) => {
+    const [message, setMessage] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!message.trim()) {
+            setError('Por favor, escreva uma mensagem.');
+            return;
+        }
+        setIsLoading(true);
+        setError('');
+
+        try {
+            const { data: ambassador, error: ambassadorError } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('term_id', user.term_id)
+                .eq('role', 'embaixador')
+                .single();
+
+            if (ambassadorError || !ambassador) {
+                throw new Error('Não foi possível encontrar um embaixador para este período.');
+            }
+
+            const conversationId = crypto.randomUUID();
+
+            const { error: insertError } = await supabase
+                .from('schedule_messages')
+                .insert({
+                    sender_id: user.id,
+                    recipient_id: ambassador.id,
+                    summary_id: summary.id,
+                    message,
+                    conversation_id: conversationId,
+                });
+
+            if (insertError) {
+                throw insertError;
+            }
+
+            onMessageSent();
+        } catch (err) {
+            console.error(err);
+            setError(err.message || 'Ocorreu um erro ao enviar a sua solicitação.');
+            setIsLoading(false);
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                <h2>Agendar Aula</h2>
+                <p>Envie uma mensagem para o embaixador do seu período para agendar uma aula sobre <strong>{summary.title}</strong>.</p>
+                <form onSubmit={handleSubmit}>
+                    <div className="form-group">
+                        <label htmlFor="schedule-message">Sua Mensagem</label>
+                        <textarea
+                            id="schedule-message"
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
+                            rows={5}
+                            placeholder="Olá, gostaria de agendar uma aula sobre este assunto..."
+                        />
+                    </div>
+                    {error && <p className="error-message">{error}</p>}
+                    <div className="modal-actions">
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+                        <button type="submit" className="btn btn-primary" disabled={isLoading}>
+                            {isLoading ? 'Enviando...' : 'Enviar Solicitação'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+const SchedulesView = ({ user, onBack }) => {
+    const [conversations, setConversations] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedConversation, setSelectedConversation] = useState(null);
+
+    useEffect(() => {
+        const fetchConversations = async () => {
+            setLoading(true);
+            const { data, error } = await supabase.rpc('get_conversations', { p_user_id: user.id });
+
+            if (error) {
+                console.error("Erro ao buscar conversas:", error);
+            } else {
+                setConversations(data);
+            }
+            setLoading(false);
+        };
+
+        fetchConversations();
+    }, [user.id]);
+
+    const handleConversationSelect = (conversation) => {
+        setSelectedConversation(conversation);
+    };
+
+    const handleBackToList = () => {
+        setSelectedConversation(null);
+    }
+
+    if (loading) {
+        return <div className="loader-container"><div className="loader"></div></div>;
+    }
+
+    if (selectedConversation) {
+        return <ChatView conversation={selectedConversation} currentUser={user} onBack={handleBackToList} />
+    }
+
+    return (
+        <div className="container schedules-view">
+            <div className="dashboard-header">
+                <h1>Agendamentos de Aulas</h1>
+                <button className="btn btn-secondary" onClick={onBack}>Voltar</button>
+            </div>
+            <div className="conversation-list">
+                {conversations.length > 0 ? (
+                    conversations.map((convo) => (
+                        <div key={convo.conversation_id} className="conversation-item" onClick={() => handleConversationSelect(convo)}>
+                            <div className="conversation-item-header">
+                                <span className="conversation-item-user">{convo.other_user_email}</span>
+                                <span className="conversation-item-summary">{convo.summary_title}</span>
+                            </div>
+                            <p className="conversation-item-message">{convo.last_message}</p>
+                        </div>
+                    ))
+                ) : (
+                    <p>Nenhuma conversa de agendamento encontrada.</p>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const ChatView = ({ conversation, currentUser, onBack }) => {
+    const [messages, setMessages] = useState([]);
+    const [newMessage, setNewMessage] = useState('');
+    const messagesEndRef = useRef(null);
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    useEffect(() => {
+        const fetchMessages = async () => {
+            const { data, error } = await supabase
+                .from('schedule_messages')
+                .select('*, sender:sender_id(email)')
+                .eq('conversation_id', conversation.conversation_id)
+                .order('created_at', { ascending: true });
+
+            if (error) {
+                console.error('Error fetching messages:', error);
+            } else {
+                setMessages(data);
+            }
+        };
+
+        fetchMessages();
+
+        const channel = supabase.channel(`schedule-messages:${conversation.conversation_id}`)
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'schedule_messages',
+                filter: `conversation_id=eq.${conversation.conversation_id}`
+            }, (payload) => {
+                setMessages((prev) => [...prev, payload.new]);
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [conversation.conversation_id]);
+
+    useEffect(scrollToBottom, [messages]);
+
+    const handleSendMessage = async (e) => {
+        e.preventDefault();
+        if (!newMessage.trim()) return;
+
+        const { error } = await supabase.from('schedule_messages').insert({
+            sender_id: currentUser.id,
+            recipient_id: conversation.other_user_id,
+            summary_id: conversation.summary_id,
+            message: newMessage,
+            conversation_id: conversation.conversation_id,
+        });
+
+        if (error) {
+            console.error('Error sending message:', error);
+        } else {
+            setNewMessage('');
+        }
+    };
+
+    return (
+        <div className="container chat-view">
+            <div className="dashboard-header">
+                <button className="btn btn-secondary" onClick={onBack}>Voltar</button>
+                <h2>{conversation.summary_title}</h2>
+                <span>{conversation.other_user_email}</span>
+            </div>
+            <div className="chat-messages">
+                {messages.map(msg => (
+                    <div key={msg.id} className={`chat-message ${msg.sender_id === currentUser.id ? 'sent' : 'received'}`}>
+                        <p>{msg.message}</p>
+                        <span className="chat-message-time">{new Date(msg.created_at).toLocaleTimeString()}</span>
+                    </div>
+                ))}
+                <div ref={messagesEndRef} />
+            </div>
+            <form className="chat-input-form" onSubmit={handleSendMessage}>
+                <input
+                    type="text"
+                    className="input"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Digite sua mensagem..."
+                />
+                <button type="submit" className="btn btn-primary">Enviar</button>
+            </form>
+        </div>
+    );
+};
+
+const AnnotationModal = ({ onClose, onSave, highlightedText }) => {
+    const [noteContent, setNoteContent] = useState('');
+
+    const handleSave = () => {
+        if (noteContent.trim()) {
+            onSave(noteContent);
+        }
+    };
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                <h2>Adicionar Anotação</h2>
+                {highlightedText && (
+                    <blockquote className="highlighted-quote-modal">
+                        {highlightedText}
+                    </blockquote>
+                )}
+                <textarea
+                    placeholder="Escreva sua anotação aqui..."
+                    value={noteContent}
+                    onChange={(e) => setNoteContent(e.target.value)}
+                    rows={6}
+                />
+                <div className="modal-actions">
+                    <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+                    <button className="btn btn-primary" onClick={handleSave} disabled={!noteContent.trim()}>Salvar Anotação</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- ATUALIZADO: `MockExamModal` agora usa `summaries` (matérias) em vez de `subjects` (disciplinas) ---
+const MockExamModal = ({ isOpen, onClose, onStartExam, summaries, user }) => {
+    const [selectedSummaries, setSelectedSummaries] = useState([]);
+    const [numQuestions, setNumQuestions] = useState(10);
+    const [focusOnErrors, setFocusOnErrors] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            setSelectedSummaries([]);
+            setNumQuestions(10);
+            setFocusOnErrors(false);
+        }
+    }, [isOpen]);
+
+    const handleSummaryChange = (summaryId) => {
+        setSelectedSummaries(prev =>
+            prev.includes(summaryId)
+                ? prev.filter(id => id !== summaryId)
+                : [...prev, summaryId]
+        );
+    };
+
+    const handleStart = () => {
+        if (selectedSummaries.length === 0) {
+            alert("Por favor, selecione pelo menos uma matéria.");
+            return;
+        }
+        onStartExam({
+            summaryIds: selectedSummaries,
+            count: numQuestions,
+            errorsOnly: focusOnErrors
+        });
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content large" onClick={e => e.stopPropagation()}>
+                <h2>Gerar Simulado Personalizado</h2>
+                <div className="form-group">
+                    <label>Matérias (Resumos)</label>
+                    <div className="subjects-checkbox-group">
+                        {summaries.map(sum => (
+                            <label key={sum.id}>
+                                <input
+                                    type="checkbox"
+                                    checked={selectedSummaries.includes(sum.id)}
+                                    onChange={() => handleSummaryChange(sum.id)}
+                                />
+                                {sum.title}
+                            </label>
+                        ))}
+                    </div>
+                </div>
+                <div className="form-group">
+                    <label htmlFor="num-questions">Número de Questões</label>
+                    <input
+                        id="num-questions"
+                        type="number"
+                        className="input"
+                        value={numQuestions}
+                        onChange={e => setNumQuestions(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        min="1"
+                        max="100"
+                    />
+                </div>
+                <div className="form-group">
+                    <label>
+                        <input
+                            type="checkbox"
+                            checked={focusOnErrors}
+                            onChange={e => setFocusOnErrors(e.target.checked)}
+                        />
+                        Focar em questões que já errei
+                    </label>
+                </div>
+                <div className="modal-actions">
+                    <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+                    <button className="btn btn-primary" onClick={handleStart} disabled={selectedSummaries.length === 0}>
+                        Iniciar Simulado
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const MockExamView = ({ questions, onFinishExam }) => {
+    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+    const [userAnswers, setUserAnswers] = useState({});
+    const isFinished = currentQuestionIndex >= questions.length;
+
+    const handleAnswer = (alternativeIndex) => {
+        setUserAnswers(prev => ({...prev, [currentQuestionIndex]: alternativeIndex}));
+    };
+
+    const goToNext = () => {
+        if (userAnswers[currentQuestionIndex] !== undefined) {
+             setCurrentQuestionIndex(prev => prev + 1);
+        } else {
+            alert("Por favor, selecione uma alternativa.");
+        }
+    };
+
+    if (isFinished) {
+        let score = 0;
+        questions.forEach((q, index) => {
+            if (q.correctAlternativeIndex === userAnswers[index]) {
+                score++;
+            }
+        });
+        const percentage = questions.length > 0 ? Math.round((score / questions.length) * 100) : 0;
+
+        return (
+            <div className="container mock-exam-results">
+                <h2>Simulado Concluído!</h2>
+                <p className="final-score">Sua Pontuação: {score} de {questions.length} ({percentage}%)</p>
+                <button className="btn btn-primary" onClick={onFinishExam}>Voltar ao Início</button>
+            </div>
+        );
+    }
+
+    const question = questions[currentQuestionIndex];
+    const userAnswer = userAnswers[currentQuestionIndex];
+    const isAnswered = userAnswer !== undefined;
+
+    return (
+        <div className="container mock-exam-view">
+             <div className="mock-exam-header">
+                <h1>Simulado</h1>
+                <span>Questão {currentQuestionIndex + 1} de {questions.length}</span>
+            </div>
+            <div className="question-block">
+                <p className="question-text">{question.questionText}</p>
+                 <div className="alternatives-list">
+                    {question.alternatives.map((alt, aIndex) => (
+                        <button
+                            key={aIndex}
+                            className={`alternative-item ${isAnswered && userAnswer === aIndex ? 'selected' : ''}`}
+                            onClick={() => handleAnswer(aIndex)}
+                            disabled={isAnswered}
+                        >
+                            {alt}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <div className="mock-exam-footer">
+                <button className="btn btn-primary" onClick={goToNext}>
+                    {currentQuestionIndex === questions.length - 1 ? "Finalizar Simulado" : "Próxima Questão"}
+                </button>
+            </div>
+        </div>
+    );
+};
+
 
 // --- COMPONENTE PRINCIPAL APP ---
 const App = () => {
-  // States de UI e Autenticação
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1994,18 +2643,16 @@ const App = () => {
   const [view, setView] = useState('dashboard');
   const [currentSubjectId, setCurrentSubjectId] = useState(null);
   const [currentSummaryId, setCurrentSummaryId] = useState(null);
-
-  // States de Dados
   const [subjects, setSubjects] = useState([]);
   const [summaries, setSummaries] = useState([]);
   const [completedSummaries, setCompletedSummaries] = useState([]);
   const [lastViewed, setLastViewed] = useState([]);
-
-  // States de Modais, Loading e Filtros
   const [isSubjectModalOpen, setSubjectModalOpen] = useState(false);
   const [isSummaryModalOpen, setSummaryModalOpen] = useState(false);
   const [isAISplitterModalOpen, setAISplitterModalOpen] = useState(false);
   const [isAIUpdateModalOpen, setAIUpdateModalOpen] = useState(false);
+  const [isScheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [isMockExamModalOpen, setMockExamModalOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
   const [editingSummary, setEditingSummary] = useState(null);
   const [isBatchLoading, setIsBatchLoading] = useState(false);
@@ -2013,8 +2660,8 @@ const App = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTermForAdmin, setSelectedTermForAdmin] = useState(null);
   const [areSummariesLoaded, setAreSummariesLoaded] = useState(false);
+  const [mockExamQuestions, setMockExamQuestions] = useState([]);
 
-  // --- CORRIGIDO: useEffect para escutar mudanças de sessão em tempo real ---
   useEffect(() => {
     if (user) {
       const localSessionId = localStorage.getItem('active_session_id');
@@ -2181,15 +2828,17 @@ const App = () => {
     }
   }, [lastViewed, user]);
 
-  // --- CORRIGIDO: Função handleLogout com limpeza da sessão no localStorage ---
-  const handleLogout = () => {
+  const handleLogout = async () => {
       if (user) {
-          localStorage.removeItem(`integrator_week_answers_${user.id}`);
-          localStorage.removeItem(`integrator_week_questions_${user.id}`);
-          localStorage.removeItem('active_session_id');
+        localStorage.removeItem(`integrator_week_answers_${user.id}`);
+        localStorage.removeItem(`integrator_week_questions_${user.id}`);
+        localStorage.removeItem('active_session_id');
       }
-      supabase.auth.signOut();
-  };
+      await supabase.auth.signOut();
+      setUser(null);
+      setSession(null);
+      setView("login"); // ou "dashboard" / tela inicial, dependendo do fluxo
+    };
 
   const handleSelectSubject = (subject) => {
     if (subject.name.toLowerCase().trim() === 'semana integradora') {
@@ -2305,15 +2954,14 @@ const App = () => {
     const updatedSummaries = subjectSummaries.map((s, index) => ({ ...s, position: index }));
     setSummaries(prev => [...prev.filter(s => s.subject_id !== currentSubjectId), ...updatedSummaries]);
     const updates = updatedSummaries.map(s => supabase.from('summaries').update({ position: s.position }).eq('id', s.id));
-    const { error } = await Promise.all(updates);
-    if (error) alert("Não foi possível salvar a nova ordem.");
+    await Promise.all(updates);
   };
 
   const handleGenerateQuiz = async () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
     try {
-        const prompt = `Você é um especialista em criar questões para provas de residência médica. Baseado estritamente no conteúdo do resumo a seguir, crie uma lista de no mínimo 10 questões de múltipla escolha de alto nível. As questões devem ser complexas, mesclando diferentes formatos (ex: caso clínico curto, "qual das seguintes NÃO é", etc.). Cada questão deve ter 4 alternativas plausíveis, mas apenas uma correta. Forneça também um comentário explicativo para a resposta correta, justificando-a com base no texto do resumo. Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`;
+        const prompt = `Você é um especialista em criar questões para provas de residência médica... Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`;
         const parsedJson = await generateAIContentWithRetry(prompt, quizSchema);
         const { data, error } = await supabase.from('summaries').update({ questions: parsedJson.questions }).eq('id', currentSummaryId).select().single();
         if (error) throw error;
@@ -2325,7 +2973,7 @@ const App = () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
     try {
-        const prompt = `Baseado no resumo sobre "${summary.title}", crie flashcards para estudo. Formato pergunta-e-resposta (frente e verso). Priorize conceitos-chave, definições, mecanismos, causas, consequências, classificações e relações clínicas. EVITE valores numéricos específicos. Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`;
+        const prompt = `Baseado no resumo sobre "${summary.title}"... Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`;
         const parsedJson = await generateAIContentWithRetry(prompt, flashcardsSchema);
         const { data, error } = await supabase.from('summaries').update({ flashcards: parsedJson.flashcards }).eq('id', currentSummaryId).select().single();
         if (error) throw error;
@@ -2381,14 +3029,9 @@ const App = () => {
                 const isFlashcards = contentType === 'flashcards';
                 const contentName = isFlashcards ? 'Flashcards' : 'Questões';
                 setBatchLoadingMessage(`Gerando ${contentName} para "${summary.title}" (${index + 1}/${summariesToProcess.length})...`);
-
-                const prompt = isFlashcards
-                    ? `Baseado no resumo sobre "${summary.title}", crie flashcards para estudo. Formato pergunta-e-resposta (frente e verso). Priorize conceitos-chave, definições, mecanismos, causas, consequências, classificações e relações clínicas. EVITE valores numéricos específicos. Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`
-                    : `Você é um especialista em criar questões para provas de residência médica. Baseado estritamente no conteúdo do resumo a seguir, crie uma lista de no mínimo 10 questões de múltipla escolha de alto nível. As questões devem ser complexas, mesclando diferentes formatos (ex: caso clínico curto, "qual das seguintes NÃO é", etc.). Cada questão deve ter 4 alternativas plausíveis, mas apenas uma correta. Forneça também um comentário explicativo para a resposta correta, justificando-a com base no texto do resumo. Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`;
-
+                const prompt = isFlashcards ? `Baseado no resumo sobre "${summary.title}", crie flashcards...` : `Baseado no resumo... crie questões...`;
                 const schema = isFlashcards ? flashcardsSchema : quizSchema;
                 const parsedJson = await generateAIContentWithRetry(prompt, schema);
-
                 const contentPayload = parsedJson[isFlashcards ? 'flashcards' : 'questions'];
                 const { error } = await supabase.from('summaries').update({ [contentType]: contentPayload }).eq('id', summary.id);
 
@@ -2413,7 +3056,6 @@ const App = () => {
     const handleGenerateFlashcardsForAllSubjects = () => handleGenerateContentForAllMissing('flashcards');
     const handleGenerateQuizForAllSubjects = () => handleGenerateContentForAllMissing('questions');
 
-
    const handleGetExplanation = async (questionText, correctAnswer) => {
         const summary = summaries.find(s => s.id === currentSummaryId);
         if (!summary) return "Contexto não encontrado.";
@@ -2433,6 +3075,54 @@ const App = () => {
             const { error } = await supabase.from('user_summary_progress').insert({ user_id: user.id, summary_id: currentSummaryId });
             if (!error) setCompletedSummaries(prev => [...prev, currentSummaryId]);
             else alert("Erro ao salvar o progresso.");
+        }
+    };
+
+    const handleStartMockExam = async (config) => {
+        setLoading(true);
+        setMockExamModalOpen(false);
+
+        try {
+            const { data: summariesWithQuestions, error: summariesError } = await supabase
+                .from('summaries')
+                .select('questions')
+                .in('id', config.summaryIds)
+                .not('questions', 'is', null);
+
+            if (summariesError) throw summariesError;
+
+            let allQuestions = summariesWithQuestions.flatMap(s => s.questions || []);
+
+            if (config.errorsOnly) {
+                const { data: errorAttempts, error: attemptsError } = await supabase
+                    .from('user_quiz_attempts')
+                    .select('question_text')
+                    .eq('user_id', user.id)
+                    .eq('is_correct', false);
+
+                if (attemptsError) throw attemptsError;
+
+                const errorQuestionsText = new Set(errorAttempts.map(a => a.question_text));
+                allQuestions = allQuestions.filter(q => errorQuestionsText.has(q.questionText));
+            }
+
+            if (allQuestions.length === 0) {
+                alert("Nenhuma questão encontrada para os critérios selecionados. Tente novamente.");
+                setLoading(false);
+                return;
+            }
+
+            const shuffled = allQuestions.sort(() => 0.5 - Math.random());
+            const selectedQuestions = shuffled.slice(0, config.count);
+
+            setMockExamQuestions(selectedQuestions);
+            setView('mock_exam');
+
+        } catch (error) {
+            console.error("Erro ao gerar simulado:", error);
+            alert("Não foi possível gerar o simulado. Tente novamente.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -2503,7 +3193,6 @@ const App = () => {
                 {user.role === 'admin' && <AdminTermSelector />}
                 <Dashboard
                     user={user}
-                    termName={terms.find(t => t.id === user.term_id)?.name}
                     onLogout={handleLogout}
                     subjects={subjectsForUser}
                     onSelectSubject={handleSelectSubject}
@@ -2523,17 +3212,38 @@ const App = () => {
                     onGenerateQuizForAll={handleGenerateQuizForAllSubjects}
                     isBatchLoading={isBatchLoading}
                     batchLoadingMessage={batchLoadingMessage}
+                    onNavigateToSchedules={() => setView('schedules')}
                 />
             </>
         );
       case 'subject':
-        return <SummaryListView subject={currentSubject} summaries={summariesForCurrentSubject} onSelectSummary={handleSelectSummary} onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }} onEditSummary={(s) => { setEditingSummary(s); setSummaryModalOpen(true); }} onDeleteSummary={handleDeleteSummary} user={user} completedSummaries={completedSummaries} onAISplit={() => setAISplitterModalOpen(true)} onReorderSummaries={handleReorderSummaries} onGenerateFlashcardsForAll={() => generateForAll('flashcards')} onGenerateQuizForAll={() => generateForAll('questions')} isBatchLoading={isBatchLoading} batchLoadingMessage={batchLoadingMessage}/>;
+        return <SummaryListView
+            subject={currentSubject}
+            summaries={summariesForCurrentSubject}
+            onSelectSummary={handleSelectSummary}
+            onAddSummary={() => { setEditingSummary(null); setSummaryModalOpen(true); }}
+            onEditSummary={(s) => { setEditingSummary(s); setSummaryModalOpen(true); }}
+            onDeleteSummary={handleDeleteSummary}
+            user={user}
+            completedSummaries={completedSummaries}
+            onAISplit={() => setAISplitterModalOpen(true)}
+            onReorderSummaries={handleReorderSummaries}
+            onGenerateFlashcardsForAll={() => generateForAll('flashcards')}
+            onGenerateQuizForAll={() => generateForAll('questions')}
+            isBatchLoading={isBatchLoading}
+            batchLoadingMessage={batchLoadingMessage}
+            onOpenMockExamModal={() => setMockExamModalOpen(true)}
+        />;
       case 'summary':
-        return <SummaryDetailView summary={currentSummary} subject={currentSubject} onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }} onDelete={() => handleDeleteSummary(currentSummary.id)} onGenerateQuiz={handleGenerateQuiz} onToggleComplete={handleToggleComplete} isCompleted={completedSummaries.includes(currentSummary.id)} onGetExplanation={handleGetExplanation} user={user} onAIUpdate={() => setAIUpdateModalOpen(true)} onGenerateFlashcards={handleGenerateFlashcards} />;
+        return <SummaryDetailView summary={currentSummary} subject={currentSubject} onEdit={() => { setEditingSummary(currentSummary); setSummaryModalOpen(true); }} onDelete={() => handleDeleteSummary(currentSummary.id)} onGenerateQuiz={handleGenerateQuiz} onToggleComplete={handleToggleComplete} isCompleted={completedSummaries.includes(currentSummary.id)} onGetExplanation={handleGetExplanation} user={user} onAIUpdate={() => setAIUpdateModalOpen(true)} onGenerateFlashcards={handleGenerateFlashcards} onScheduleClass={() => setScheduleModalOpen(true)} />;
       case 'integrator_week':
         return <IntegratorWeekView subject={currentSubject} allSubjects={subjects} user={user} />;
       case 'admin':
         return <AdminPanel onBack={handleBackToDashboard} />;
+      case 'schedules':
+        return <SchedulesView user={user} onBack={handleBackToDashboard} />;
+      case 'mock_exam':
+        return <MockExamView questions={mockExamQuestions} onFinishExam={() => { setMockExamQuestions([]); handleBackToDashboard(); }} />;
       default:
         return <div>Carregando...</div>;
     }
@@ -2546,11 +3256,13 @@ const App = () => {
       } else if (view === 'summary' && currentSubject && currentSummary) {
           paths.push({ name: currentSubject.name, onClick: handleBackToSubject });
           paths.push({ name: currentSummary.title, onClick: () => {} });
+      } else if (view === 'mock_exam') {
+          paths.push({ name: 'Simulado', onClick: () => {} });
       }
       return paths;
   }, [view, currentSubject, currentSummary]);
 
-  const showHeader = user && user.status === 'active' && view !== 'dashboard' && view !== 'admin';
+  const showHeader = user && user.status === 'active' && !['dashboard', 'admin', 'schedules'].includes(view);
 
   return (
     <>
@@ -2562,10 +3274,18 @@ const App = () => {
       )}
       {renderContent()}
 
-      <SubjectModal isOpen={isSubjectModalOpen} onClose={() => setSubjectModalOpen(false)} onSave={handleSaveSubject} subject={editingSubject} existingSubjects={subjects} user={user} terms={terms} />
+      <SubjectModal isOpen={isSubjectModalOpen} onClose={() => setSubjectModalOpen(false)} onSave={handleSaveSubject} subject={editingSubject} user={user} terms={terms} />
       <SummaryModal isOpen={isSummaryModalOpen} onClose={() => setSummaryModalOpen(false)} onSave={handleSaveSummary} summary={editingSummary} subjectId={currentSubjectId} />
       <AISplitterModal isOpen={isAISplitterModalOpen} onClose={() => setAISplitterModalOpen(false)} onSummariesCreated={handleSplitAndSaveSummaries} />
       {isAIUpdateModalOpen && currentSummary && <AIUpdateModal summary={currentSummary} onClose={() => setAIUpdateModalOpen(false)} onUpdate={(newContent) => handleUpdateSummaryContent(currentSummary.id, newContent)} />}
+      {isScheduleModalOpen && currentSummary && user && <ScheduleRequestModal isOpen={isScheduleModalOpen} onClose={() => setScheduleModalOpen(false)} summary={currentSummary} user={user} onMessageSent={() => {setScheduleModalOpen(false); alert("Sua solicitação foi enviada!");}}/>}
+      {user && <MockExamModal
+          isOpen={isMockExamModalOpen}
+          onClose={() => setMockExamModalOpen(false)}
+          onStartExam={handleStartMockExam}
+          summaries={summariesForCurrentSubject}
+          user={user}
+      />}
     </>
   );
 };
