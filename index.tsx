@@ -1596,11 +1596,12 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
 const FlashcardView = ({ flashcards, summaryId, userId }) => {
     const [srsData, setSrsData] = useState(null);
     const [reviewDeck, setReviewDeck] = useState([]);
+    const [dueCards, setDueCards] = useState([]); // MUDANÇA: Novo estado para guardar os cards a revisar
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
     const [isFinished, setIsFinished] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const [studyMode, setStudyMode] = useState(null); // 'review' or 'studyAll'
+    const [studyMode, setStudyMode] = useState(null);
 
     const calculateSrs = (srsRecord, knows) => {
         let { interval, ease_factor } = srsRecord || { interval: 0, ease_factor: 2.5 };
@@ -1621,10 +1622,15 @@ const FlashcardView = ({ flashcards, summaryId, userId }) => {
         return { interval, ease_factor, due_date: dueDate.toISOString() };
     };
 
+    // MUDANÇA: O useEffect agora busca os dados imediatamente, sem depender do studyMode.
     useEffect(() => {
         const initializeDeck = async () => {
-            if (!studyMode) return;
-            setIsLoading(true);
+            setIsLoading(true); // Garante que o loading seja exibido durante a busca
+            if (!userId || !summaryId) {
+                setIsLoading(false);
+                return;
+            }
+
             const { data, error } = await supabase
                 .from('user_flashcard_srs')
                 .select('*')
@@ -1637,31 +1643,32 @@ const FlashcardView = ({ flashcards, summaryId, userId }) => {
                 const srsMap = new Map(data.map(item => [item.flashcard_front, item]));
                 setSrsData(srsMap);
 
-                if (studyMode === 'review') {
-                    const today = new Date();
-                    today.setHours(23, 59, 59, 999); // Considerar até o final do dia
-                    const dueCards = flashcards.filter(card => {
-                        const record = srsMap.get(card.front);
-                        return !record || new Date(record.due_date) <= today;
-                    });
-                    setReviewDeck(dueCards);
-                } else { // studyAll
-                    setReviewDeck([...flashcards].sort(() => Math.random() - 0.5));
-                }
+                const today = new Date();
+                today.setHours(23, 59, 59, 999);
+                const cardsParaRevisar = flashcards.filter(card => {
+                    const record = srsMap.get(card.front);
+                    return !record || new Date(record.due_date) <= today;
+                });
+                setDueCards(cardsParaRevisar); // Guarda os cards que precisam de revisão
             }
-            setIsLoading(false);
+            setIsLoading(false); // Desativa o loading após a busca
         };
 
-        if (userId && summaryId) {
-            initializeDeck();
-        }
-    }, [flashcards, summaryId, userId, studyMode]);
+        initializeDeck();
+    }, [flashcards, summaryId, userId]); // Dependências corrigidas
 
+    // MUDANÇA: A função agora usa os dados pré-carregados
     const startSession = (mode) => {
         setCurrentIndex(0);
         setIsFlipped(false);
         setIsFinished(false);
         setStudyMode(mode);
+
+        if (mode === 'review') {
+            setReviewDeck(dueCards); // Usa os cards de revisão já calculados
+        } else { // studyAll
+            setReviewDeck([...flashcards].sort(() => Math.random() - 0.5));
+        }
     };
 
     const handleAnswer = async (knows) => {
@@ -1690,14 +1697,18 @@ const FlashcardView = ({ flashcards, summaryId, userId }) => {
 
     const handleFlip = () => setIsFlipped(prev => !prev);
 
+    // MUDANÇA: Lógica de renderização ajustada
+    if (isLoading) {
+        return <div className="loader-container"><div className="loader"></div></div>;
+    }
+
     if (!studyMode) {
-        if (isLoading) return <div className="loader-container"><div className="loader"></div></div>;
         return (
             <div className="flashcard-container finished-deck">
                 <h2>Modo de Estudo</h2>
-                <p>Você tem <strong>{reviewDeck.length}</strong> card(s) para revisar hoje.</p>
+                <p>Você tem <strong>{dueCards.length}</strong> card(s) para revisar hoje.</p>
                 <div className="flashcard-mode-selection">
-                    <button className="btn btn-primary" onClick={() => startSession('review')} disabled={reviewDeck.length === 0}>
+                    <button className="btn btn-primary" onClick={() => startSession('review')} disabled={dueCards.length === 0}>
                         Revisar Cards de Hoje
                     </button>
                     <button className="btn btn-secondary" onClick={() => startSession('studyAll')}>
@@ -1713,7 +1724,7 @@ const FlashcardView = ({ flashcards, summaryId, userId }) => {
             <div className="flashcard-container finished-deck">
                 <h2>Parabéns!</h2>
                 <p>Você concluiu a sessão de estudos.</p>
-                <button className="btn btn-primary" onClick={() => setStudyMode(null)}>Voltar</button>
+                <button className="btn btn-primary" onClick={() => { setStudyMode(null); setDueCards([]); /* Recalcula na próxima entrada */ }}>Voltar</button>
             </div>
         );
     }
