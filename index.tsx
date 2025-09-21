@@ -1596,7 +1596,7 @@ const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, on
 const FlashcardView = ({ flashcards, summaryId, userId }) => {
     const [srsData, setSrsData] = useState(null);
     const [reviewDeck, setReviewDeck] = useState([]);
-    const [dueCards, setDueCards] = useState([]); // MUDANÇA: Novo estado para guardar os cards a revisar
+    const [dueCards, setDueCards] = useState([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
     const [isFinished, setIsFinished] = useState(false);
@@ -1622,10 +1622,9 @@ const FlashcardView = ({ flashcards, summaryId, userId }) => {
         return { interval, ease_factor, due_date: dueDate.toISOString() };
     };
 
-    // MUDANÇA: O useEffect agora busca os dados imediatamente, sem depender do studyMode.
     useEffect(() => {
         const initializeDeck = async () => {
-            setIsLoading(true); // Garante que o loading seja exibido durante a busca
+            setIsLoading(true);
             if (!userId || !summaryId) {
                 setIsLoading(false);
                 return;
@@ -1649,15 +1648,14 @@ const FlashcardView = ({ flashcards, summaryId, userId }) => {
                     const record = srsMap.get(card.front);
                     return !record || new Date(record.due_date) <= today;
                 });
-                setDueCards(cardsParaRevisar); // Guarda os cards que precisam de revisão
+                setDueCards(cardsParaRevisar);
             }
-            setIsLoading(false); // Desativa o loading após a busca
+            setIsLoading(false);
         };
 
         initializeDeck();
-    }, [flashcards, summaryId, userId]); // Dependências corrigidas
+    }, [flashcards, summaryId, userId]);
 
-    // MUDANÇA: A função agora usa os dados pré-carregados
     const startSession = (mode) => {
         setCurrentIndex(0);
         setIsFlipped(false);
@@ -1665,39 +1663,66 @@ const FlashcardView = ({ flashcards, summaryId, userId }) => {
         setStudyMode(mode);
 
         if (mode === 'review') {
-            setReviewDeck(dueCards); // Usa os cards de revisão já calculados
+            setReviewDeck(dueCards);
         } else { // studyAll
             setReviewDeck([...flashcards].sort(() => Math.random() - 0.5));
         }
     };
 
+    // --- FUNÇÃO ATUALIZADA ---
     const handleAnswer = async (knows) => {
         const currentCard = reviewDeck[currentIndex];
         const currentSrsRecord = srsData?.get(currentCard.front);
         const newSrsData = calculateSrs(currentSrsRecord, knows);
 
+        // A lógica de salvar no Supabase e atualizar o estado do SRS permanece a mesma.
         await supabase.from('user_flashcard_srs').upsert({
             user_id: userId,
             summary_id: summaryId,
             flashcard_front: currentCard.front,
             ...newSrsData,
         });
-
         setSrsData(prev => new Map(prev).set(currentCard.front, newSrsData));
 
+        // Vira o card de volta antes da transição.
         setIsFlipped(false);
+
+        // Atraso para permitir que a animação de virar o card aconteça.
         setTimeout(() => {
-            if (currentIndex + 1 >= reviewDeck.length) {
-                setIsFinished(true);
+            if (knows) {
+                // Se o usuário acertou, o card é removido do baralho desta sessão.
+                const newDeck = reviewDeck.filter((_, index) => index !== currentIndex);
+                setReviewDeck(newDeck);
+
+                if (newDeck.length === 0) {
+                    setIsFinished(true);
+                } else if (currentIndex >= newDeck.length) {
+                    // Caso o card removido fosse o último da lista, volta para o início.
+                    setCurrentIndex(0);
+                }
+                // Se não for o último, o próximo card naturalmente ocupará o `currentIndex` atual,
+                // então não é necessário alterar o índice.
+
             } else {
-                setCurrentIndex(prev => prev + 1);
+                // Se o usuário errou, o card vai para o final do baralho.
+                // Criamos um novo array com o card atual movido para o fim.
+                const newDeck = [...reviewDeck.slice(0, currentIndex), ...reviewDeck.slice(currentIndex + 1), currentCard];
+                setReviewDeck(newDeck);
+
+                // Se o card movido era o último da lista, o índice deve ser resetado para 0
+                // para evitar que o índice fique fora dos limites do novo array.
+                if (currentIndex >= newDeck.length) {
+                     setCurrentIndex(0);
+                }
+                // Se não for o último card, o próximo item assumirá o índice atual
+                // e a revisão continua naturalmente, sem alterar o índice.
             }
         }, 300);
     };
 
+
     const handleFlip = () => setIsFlipped(prev => !prev);
 
-    // MUDANÇA: Lógica de renderização ajustada
     if (isLoading) {
         return <div className="loader-container"><div className="loader"></div></div>;
     }
@@ -1724,7 +1749,7 @@ const FlashcardView = ({ flashcards, summaryId, userId }) => {
             <div className="flashcard-container finished-deck">
                 <h2>Parabéns!</h2>
                 <p>Você concluiu a sessão de estudos.</p>
-                <button className="btn btn-primary" onClick={() => { setStudyMode(null); setDueCards([]); /* Recalcula na próxima entrada */ }}>Voltar</button>
+                <button className="btn btn-primary" onClick={() => { setStudyMode(null); /* Recarrega os cards na próxima entrada */ }}>Voltar</button>
             </div>
         );
     }
@@ -1733,7 +1758,7 @@ const FlashcardView = ({ flashcards, summaryId, userId }) => {
         return (
              <div className="flashcard-container finished-deck">
                 <h2>Tudo em dia!</h2>
-                <p>Você não tem cards para revisar hoje.</p>
+                <p>Você não tem cards para revisar hoje ou já concluiu todos.</p>
                 <button className="btn btn-primary" onClick={() => setStudyMode(null)}>Voltar</button>
             </div>
         );
@@ -1744,7 +1769,7 @@ const FlashcardView = ({ flashcards, summaryId, userId }) => {
     return (
         <div className="flashcard-container">
             <div className="flashcard-progress">
-                <span>{currentIndex + 1} / {reviewDeck.length}</span>
+                <span>{reviewDeck.length} restante(s)</span>
             </div>
             <div className={`flashcard ${isFlipped ? 'is-flipped' : ''}`} onClick={handleFlip}>
                 <div className="flashcard-inner">
