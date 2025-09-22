@@ -582,7 +582,7 @@ const LoginScreen = ({ theme, toggleTheme }) => {
                 password,
             });
             if (signUpError) throw signUpError;
-            const mercadoPagoCheckoutUrl = 'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=fa9742c919ac44d793ad723d66d9feae';
+            const mercadoPagoCheckoutUrl = 'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=bfeb57b445184aa080956efd504fcf6b';
             window.location.href = mercadoPagoCheckoutUrl;
 
         } else {
