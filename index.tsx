@@ -566,6 +566,7 @@ const Breadcrumbs = ({ paths }) => (
 const LoginScreen = ({ theme, toggleTheme }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -580,6 +581,11 @@ const LoginScreen = ({ theme, toggleTheme }) => {
             const { error: signUpError } = await supabase.auth.signUp({
                 email,
                 password,
+                options: {
+                    data: {
+                        phone: phone,
+                    }
+                }
             });
             if (signUpError) throw signUpError;
             const mercadoPagoCheckoutUrl = 'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=bfeb57b445184aa080956efd504fcf6b';
@@ -644,6 +650,20 @@ const LoginScreen = ({ theme, toggleTheme }) => {
               required
             />
           </div>
+          {isSignUp && (
+            <div className="form-group">
+              <label htmlFor="phone-input">Telefone (com DDD)</label>
+              <input
+                id="phone-input"
+                className="input"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="(XX) XXXXX-XXXX"
+                required
+              />
+            </div>
+           )}
           {error && <p className="error-message">{error}</p>}
           <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? 'Carregando...' : (isSignUp ? 'Registrar e Pagar' : 'Entrar')}
@@ -1136,7 +1156,7 @@ const AdminPanel = ({ onBack }) => {
         const fetchUsers = async () => {
             setLoadingUsers(true);
             try {
-                const { data, error } = await supabase.from('profiles').select('id, email, role, status, login_count').order('email');
+                const { data, error } = await supabase.from('profiles').select('id, email, role, status, login_count, phone').order('email');
                 if (error) throw error;
                 setUsers(data || []);
             } catch (error) {
@@ -1169,6 +1189,7 @@ const AdminPanel = ({ onBack }) => {
                     <thead>
                         <tr>
                             <th>Email</th>
+                            <th>Telefone</th>
                             <th>Status</th>
                             <th>Nº de Acessos</th>
                             <th>Ações</th>
@@ -1178,6 +1199,7 @@ const AdminPanel = ({ onBack }) => {
                         {users.filter(u => u.role !== 'admin').map(user => (
                             <tr key={user.id}>
                                 <td>{user.email}</td>
+                                <td>{user.phone || 'N/A'}</td>
                                 <td>
                                     <span className={`status-badge status-${user.status || 'default'}`}>
                                         {user.status === 'pending_approval' ? 'Pendente' : user.status === 'active' ? 'Ativo' : user.status === 'blocked' ? 'Bloqueado' : 'Indefinido'}
