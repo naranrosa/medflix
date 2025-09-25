@@ -1145,8 +1145,108 @@ const ReportsDashboard = () => {
     );
 };
 
+const DpManagementModal = ({ isOpen, onClose, user, terms, allSubjects, onSave }) => {
+    const [selectedDpSubjects, setSelectedDpSubjects] = useState(new Set());
+    const [isLoading, setIsLoading] = useState(true);
 
-const AdminPanel = ({ onBack }) => {
+    useEffect(() => {
+        if (isOpen && user) {
+            setIsLoading(true);
+            const fetchCurrentDps = async () => {
+                const { data, error } = await supabase
+                    .from('user_subject_access')
+                    .select('subject_id')
+                    .eq('user_id', user.id);
+
+                if (error) {
+                    console.error("Erro ao buscar DPs do usuário:", error);
+                } else {
+                    setSelectedDpSubjects(new Set(data.map(item => item.subject_id)));
+                }
+                setIsLoading(false);
+            };
+            fetchCurrentDps();
+        }
+    }, [isOpen, user]);
+
+    const handleCheckboxChange = (subjectId) => {
+        setSelectedDpSubjects(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(subjectId)) {
+                newSet.delete(subjectId);
+            } else {
+                newSet.add(subjectId);
+            }
+            return newSet;
+        });
+    };
+
+    const handleSave = () => {
+        onSave(user.id, Array.from(selectedDpSubjects));
+    };
+
+    if (!isOpen) return null;
+
+    const subjectsByTerm = allSubjects.reduce((acc, subject) => {
+        const termId = subject.term_id;
+        if (!acc[termId]) {
+            acc[termId] = [];
+        }
+        acc[termId].push(subject);
+        return acc;
+    }, {});
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
+                <h2>Gerenciar DPs para {user.email}</h2>
+                <p>Selecione as matérias de outros períodos que este aluno precisa cursar.</p>
+
+                {isLoading ? (
+                    <div className="loader-container"><div className="loader"></div></div>
+                ) : (
+                    <div className="dp-selection-container">
+                        {terms.map(term => (
+                            <fieldset key={term.id} className="dp-term-group">
+                                <legend>{term.name}</legend>
+                                <div className="subjects-checkbox-group">
+                                    {(subjectsByTerm[term.id] || []).map(subject => {
+                                        const isFromMainTerm = subject.term_id === user.term_id;
+                                        return (
+                                            <label
+                                                key={subject.id}
+                                                className={`dp-subject-label ${isFromMainTerm ? 'disabled' : ''}`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isFromMainTerm || selectedDpSubjects.has(subject.id)}
+                                                    onChange={() => handleCheckboxChange(subject.id)}
+                                                    disabled={isFromMainTerm}
+                                                />
+                                                {subject.name}
+                                                {isFromMainTerm && <span className="main-term-indicator">(Período Principal)</span>}
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </fieldset>
+                        ))}
+                    </div>
+                )}
+
+                <div className="modal-actions">
+                    <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+                    <button type="button" className="btn btn-primary" onClick={handleSave} disabled={isLoading}>
+                        Salvar Alterações
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+const AdminPanel = ({ onBack, terms, onOpenDpModal, allSubjects }) => {
     const [activeTab, setActiveTab] = useState('reports');
 
     const UserManagementPanel = () => {
@@ -1156,7 +1256,11 @@ const AdminPanel = ({ onBack }) => {
         const fetchUsers = async () => {
             setLoadingUsers(true);
             try {
-                const { data, error } = await supabase.from('profiles').select('id, email, role, status, login_count, phone').order('email');
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('id, email, role, status, login_count, phone, term_id, term:term_id(id, name)')
+                    .order('email');
+
                 if (error) throw error;
                 setUsers(data || []);
             } catch (error) {
@@ -1176,6 +1280,15 @@ const AdminPanel = ({ onBack }) => {
             }
         };
 
+        const handleUpdateUserTerm = async (userId, newTermId) => {
+            const { error } = await supabase.from('profiles').update({ term_id: newTermId }).eq('id', userId);
+            if (error) {
+                alert(`Falha ao atualizar o período do usuário: ${error.message}`);
+            } else {
+                fetchUsers();
+            }
+        };
+
         useEffect(() => {
             fetchUsers();
         }, []);
@@ -1190,6 +1303,7 @@ const AdminPanel = ({ onBack }) => {
                         <tr>
                             <th>Email</th>
                             <th>Telefone</th>
+                            <th>Período</th>
                             <th>Status</th>
                             <th>Nº de Acessos</th>
                             <th>Ações</th>
@@ -1201,12 +1315,25 @@ const AdminPanel = ({ onBack }) => {
                                 <td>{user.email}</td>
                                 <td>{user.phone || 'N/A'}</td>
                                 <td>
+                                    <select
+                                        className="select-input-sm"
+                                        value={user.term?.id || ''}
+                                        onChange={(e) => handleUpdateUserTerm(user.id, e.target.value)}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {terms.map(term => (
+                                            <option key={term.id} value={term.id}>{term.name}</option>
+                                        ))}
+                                    </select>
+                                </td>
+                                <td>
                                     <span className={`status-badge status-${user.status || 'default'}`}>
                                         {user.status === 'pending_approval' ? 'Pendente' : user.status === 'active' ? 'Ativo' : user.status === 'blocked' ? 'Bloqueado' : 'Indefinido'}
                                     </span>
                                 </td>
                                 <td>{user.login_count || 0}</td>
                                 <td className="user-actions">
+                                    <button className="btn btn-sm btn-secondary" onClick={() => onOpenDpModal(user)}>Gerenciar DPs</button>
                                     {user.status !== 'active' && <button className="btn btn-sm btn-success" onClick={() => handleUpdateUserStatus(user.id, 'active')}>Liberar</button>}
                                     {user.status !== 'blocked' && <button className="btn btn-sm btn-danger" onClick={() => handleUpdateUserStatus(user.id, 'blocked')}>Bloquear</button>}
                                     {user.status === 'blocked' && <button className="btn btn-sm btn-secondary" onClick={() => handleUpdateUserStatus(user.id, 'active')}>Desbloquear</button>}
@@ -2697,6 +2824,7 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [terms, setTerms] = useState([]);
+  const [allSubjects, setAllSubjects] = useState([]);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
   const [view, setView] = useState('dashboard');
   const [currentSubjectId, setCurrentSubjectId] = useState(null);
@@ -2711,6 +2839,8 @@ const App = () => {
   const [isAIUpdateModalOpen, setAIUpdateModalOpen] = useState(false);
   const [isScheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [isMockExamModalOpen, setMockExamModalOpen] = useState(false);
+  const [isDpModalOpen, setIsDpModalOpen] = useState(false);
+  const [managingDpForUser, setManagingDpForUser] = useState(null);
   const [editingSubject, setEditingSubject] = useState(null);
   const [editingSummary, setEditingSummary] = useState(null);
   const [isBatchLoading, setIsBatchLoading] = useState(false);
@@ -2761,18 +2891,14 @@ const App = () => {
     else setCompletedSummaries(data.map(item => item.summary_id));
   };
 
-  const fetchAppData = async (termId, userRole) => {
-    setAreSummariesLoaded(false);
-    setSummaries([]);
-    let subjectsQuery = supabase.from('subjects').select('*');
-    if (userRole !== 'admin') {
-      subjectsQuery = subjectsQuery.eq('term_id', termId);
-    }
-    const { data: subjectsData, error: subjectsError } = await subjectsQuery.order('name');
-    if (subjectsError) {
-        console.error("Erro ao buscar disciplinas:", subjectsError);
-    }
-    setSubjects(subjectsData || []);
+  const fetchUserSubjects = async (userId) => {
+      const { data, error } = await supabase.rpc('get_user_accessible_subjects', { p_user_id: userId });
+      if (error) {
+          console.error("Erro ao buscar disciplinas do usuário:", error);
+          setSubjects([]);
+      } else {
+          setSubjects(data || []);
+      }
   };
 
   useEffect(() => {
@@ -2787,11 +2913,13 @@ const App = () => {
       }
     );
 
-    const fetchTerms = async () => {
-        const { data } = await supabase.from('terms').select('*').order('id');
-        setTerms(data || []);
+    const fetchInitialData = async () => {
+        const { data: termsData } = await supabase.from('terms').select('*').order('id');
+        setTerms(termsData || []);
+        const { data: allSubjectsData } = await supabase.from('subjects').select('*').order('term_id').order('name');
+        setAllSubjects(allSubjectsData || []);
     };
-    fetchTerms();
+    fetchInitialData();
 
     return () => subscription.unsubscribe();
   }, []);
@@ -2814,10 +2942,8 @@ const App = () => {
           if (fullUser.status === 'active') {
             await supabase.rpc('increment_login_count');
             await fetchUserProgress(session.user.id);
-            if (fullUser.role === 'admin') {
-              await fetchAppData(null, 'admin');
-            } else if (fullUser.term_id) {
-              await fetchAppData(fullUser.term_id, fullUser.role);
+            if (fullUser.role !== 'admin') {
+                await fetchUserSubjects(fullUser.id);
             }
           }
         } catch (error) {
@@ -2837,6 +2963,14 @@ const App = () => {
         setView('dashboard');
     }
   }, [session, user]);
+
+  // CORREÇÃO: Effect separado para garantir que o admin receba as disciplinas após o carregamento
+  useEffect(() => {
+      if (user?.role === 'admin' && allSubjects.length > 0) {
+          setSubjects(allSubjects);
+      }
+  }, [user, allSubjects]);
+
 
   useEffect(() => {
     const fetchAllSummariesInBackground = async () => {
@@ -2895,7 +3029,7 @@ const App = () => {
       await supabase.auth.signOut();
       setUser(null);
       setSession(null);
-      setView("login"); // ou "dashboard" / tela inicial, dependendo do fluxo
+      setView("login");
     };
 
   const handleSelectSubject = (subject) => {
@@ -2926,7 +3060,7 @@ const App = () => {
       else if (data) {
           const updatedUser = { ...user, ...data };
           setUser(updatedUser);
-          await fetchAppData(newTermId, updatedUser.role);
+          await fetchUserSubjects(updatedUser.id);
       }
   };
 
@@ -2935,11 +3069,17 @@ const App = () => {
     if (subjectData.id) {
         const { data, error } = await supabase.from('subjects').update({ name: subjectData.name, color: subjectData.color, term_id: subjectData.term_id }).eq('id', subjectData.id).select().single();
         if (error) alert(error.message);
-        else if (data) setSubjects(subjects.map(s => s.id === data.id ? data : s));
+        else if (data) {
+            setSubjects(subjects.map(s => s.id === data.id ? data : s));
+            setAllSubjects(allSubjects.map(s => s.id === data.id ? data : s));
+        }
     } else {
         const { data, error } = await supabase.from('subjects').insert({ name: subjectData.name, color: subjectData.color, user_id: session.user.id, term_id: subjectData.term_id }).select().single();
         if (error) alert(error.message);
-        else if (data) setSubjects([...subjects, data]);
+        else if (data) {
+            setSubjects([...subjects, data]);
+            setAllSubjects([...allSubjects, data]);
+        }
     }
     setSubjectModalOpen(false);
     setEditingSubject(null);
@@ -2952,6 +3092,7 @@ const App = () => {
         if (error) alert(error.message);
         else {
           setSubjects(subjects.filter(s => s.id !== subjectId));
+          setAllSubjects(allSubjects.filter(s => s.id !== subjectId));
           setSummaries(summaries.filter(s => s.subject_id !== subjectId));
         }
     }
@@ -3004,6 +3145,30 @@ const App = () => {
       else if (data) setSummaries(summaries.map(s => s.id === data.id ? data : s));
       setAIUpdateModalOpen(false);
   };
+
+  const handleSaveDpSubjects = async (userId, selectedSubjectIds) => {
+    setIsDpModalOpen(false);
+    const { error: deleteError } = await supabase.from('user_subject_access').delete().eq('user_id', userId);
+    if (deleteError) {
+        alert("Erro ao limpar DPs antigas. A operação foi cancelada.");
+        console.error(deleteError);
+        return;
+    }
+
+    if (selectedSubjectIds.length > 0) {
+        const newDps = selectedSubjectIds.map(subjectId => ({ user_id: userId, subject_id: subjectId }));
+        const { error: insertError } = await supabase.from('user_subject_access').insert(newDps);
+        if (insertError) {
+            alert("Erro ao salvar as novas DPs.");
+            console.error(insertError);
+            return;
+        }
+    }
+
+    alert("As DPs do usuário foram atualizadas com sucesso!");
+    setManagingDpForUser(null);
+  };
+
 
   const handleReorderSummaries = async (startIndex, endIndex) => {
     const subjectSummaries = summaries.filter(s => s.subject_id === currentSubjectId).sort((a, b) => a.position - b.position);
@@ -3191,25 +3356,35 @@ const App = () => {
   const subjectsForUser = useMemo(() => {
     if (user?.role === 'admin') {
       if (selectedTermForAdmin) {
-        return subjects.filter(s => String(s.term_id) === String(selectedTermForAdmin));
+        return allSubjects.filter(s => String(s.term_id) === String(selectedTermForAdmin));
       }
-      return subjects;
+      return allSubjects; // Admin vê a lista completa
     }
-    return subjects;
-  }, [subjects, user, selectedTermForAdmin]);
+    return subjects; // Alunos/Embaixadores veem sua lista personalizada
+  }, [subjects, allSubjects, user, selectedTermForAdmin]);
+
 
   const searchResults = useMemo(() => {
     if (!areSummariesLoaded) return { subjects: [], summaries: [], allSummaries: [] };
+    const relevantSubjects = user?.role === 'admin' ? allSubjects : subjects;
+    const allSummariesWithSubject = summaries.map(sum => ({ ...sum, subjectName: relevantSubjects.find(sub => sub.id === sum.subject_id)?.name || '' }));
 
-    const allSummariesWithSubject = summaries.map(sum => ({ ...sum, subjectName: subjects.find(sub => sub.id === sum.subject_id)?.name || '' }));
     if (!searchQuery.trim()) return { subjects: [], summaries: [], allSummaries: summaries };
+
     const q = searchQuery.toLowerCase();
+    const filteredSubjects = subjectsForUser.filter(s => s.name.toLowerCase().includes(q));
+    const filteredSummaries = allSummariesWithSubject.filter(s =>
+        s.title.toLowerCase().includes(q) &&
+        subjectsForUser.some(sub => sub.id === s.subject_id)
+    );
+
     return {
-        subjects: subjectsForUser.filter(s => s.name.toLowerCase().includes(q)).map(s => ({ ...s, summaryCount: summaries.filter(sum => sum.subject_id === s.id).length })),
-        summaries: allSummariesWithSubject.filter(s => s.title.toLowerCase().includes(q) && subjectsForUser.some(sub => sub.id === s.subject_id)),
+        subjects: filteredSubjects.map(s => ({ ...s, summaryCount: summaries.filter(sum => sum.subject_id === s.id).length })),
+        summaries: filteredSummaries,
         allSummaries: summaries
     };
-  }, [searchQuery, subjectsForUser, summaries, subjects, areSummariesLoaded]);
+  }, [searchQuery, subjectsForUser, summaries, subjects, allSubjects, areSummariesLoaded, user]);
+
 
   const lastViewedWithDetails = useMemo(() => lastViewed.map(lv => ({ ...lv, subjectName: subjects.find(s => s.id === lv.subject_id)?.name || '...' })).filter(lv => subjects.some(s => s.id === lv.subject_id)), [lastViewed, subjects]);
 
@@ -3297,7 +3472,12 @@ const App = () => {
       case 'integrator_week':
         return <IntegratorWeekView subject={currentSubject} allSubjects={subjects} user={user} />;
       case 'admin':
-        return <AdminPanel onBack={handleBackToDashboard} />;
+        return <AdminPanel
+                    onBack={handleBackToDashboard}
+                    terms={terms}
+                    allSubjects={allSubjects}
+                    onOpenDpModal={(userToManage) => { setManagingDpForUser(userToManage); setIsDpModalOpen(true); }}
+                />;
       case 'schedules':
         return <SchedulesView user={user} onBack={handleBackToDashboard} />;
       case 'mock_exam':
@@ -3344,6 +3524,14 @@ const App = () => {
           summaries={summariesForCurrentSubject}
           user={user}
       />}
+       <DpManagementModal
+            isOpen={isDpModalOpen}
+            onClose={() => setIsDpModalOpen(false)}
+            user={managingDpForUser}
+            terms={terms}
+            allSubjects={allSubjects}
+            onSave={handleSaveDpSubjects}
+        />
     </>
   );
 };
