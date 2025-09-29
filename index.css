@@ -3584,7 +3584,6 @@ body.light-mode {
   width: 100%;
   height: 100%;
   cursor: crosshair; /* Muda o cursor para indicar que é uma área de desenho */
-  touch-action: none; /* Previne o scroll do navegador ao desenhar com o dedo/caneta */
 }
 
 /* Barra de ferramentas flutuante */
