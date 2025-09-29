@@ -2061,12 +2061,30 @@ const EraserIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" heig
 const SaveIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>;
 const HighlighterIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13.5 2H10a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5L13.5 2z"></path><polyline points="13 2 13 9 20 9"></polyline><path d="M4 22h7"></path></svg>;
 
-const AnnotationToolbar = ({ tool, onToolChange, color, onColorChange, lineWidth, onLineWidthChange, onSave }) => {
+// --- ADICIONADO: Ícones para o botão de bloqueio de rolagem ---
+const LockIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>;
+const UnlockIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>;
+
+
+// --- MODIFICADO: AnnotationToolbar agora tem o botão de bloqueio ---
+const AnnotationToolbar = ({ tool, onToolChange, color, onColorChange, lineWidth, onLineWidthChange, onSave, isScrollLocked, onToggleScrollLock }) => {
     const colors = ['#E63946', '#007BFF', '#2A9D8F', '#FFC300', '#8338EC', '#FF006E'];
     const PenToolIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>;
 
     return (
         <div className="annotation-toolbar">
+            {/* --- ADICIONADO: Botão de bloqueio de rolagem --- */}
+            <IconButton
+                onClick={() => onToggleScrollLock(prev => !prev)}
+                className={isScrollLocked ? 'active' : ''}
+                title={isScrollLocked ? "Desbloquear Rolagem e Sair do Modo Desenho" : "Bloquear Rolagem para Desenhar"}
+            >
+                {isScrollLocked ? <UnlockIcon /> : <LockIcon />}
+            </IconButton>
+
+            <div className="toolbar-separator" />
+            {/* --- FIM DA ADIÇÃO --- */}
+
             <IconButton onClick={() => onToolChange('pen')} className={tool === 'pen' ? 'active' : ''} title="Caneta">
                 <PenToolIcon />
             </IconButton>
@@ -2113,7 +2131,8 @@ const AnnotationToolbar = ({ tool, onToolChange, color, onColorChange, lineWidth
     );
 };
 
-const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
+// --- MODIFICADO: CanvasAnnotationLayer agora usa a lógica de bloqueio manual ---
+const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave, isScrollLocked, onToggleScrollLock }) => {
     const canvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [strokes, setStrokes] = useState(initialStrokes || []);
@@ -2121,7 +2140,6 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
     const [color, setColor] = useState('#E63946');
     const [lineWidth, setLineWidth] = useState(3);
 
-    // As funções de lógica interna (getCoords, startDrawing, etc.) permanecem as mesmas
     const getCoords = (event) => {
         const canvas = canvasRef.current;
         if (!canvas) return null;
@@ -2133,8 +2151,9 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
     };
 
     const startDrawing = (event) => {
-        if (event.pointerType !== 'pen') return;
-        event.preventDefault(); // Previne a rolagem
+        // --- MODIFICADO: Apenas desenha se o bloqueio estiver ativo ---
+        if (!isScrollLocked || event.pointerType !== 'pen') return;
+        event.preventDefault();
 
         const coords = getCoords(event);
         if (!coords) return;
@@ -2155,7 +2174,7 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
 
     const draw = (event) => {
         if (!isDrawing) return;
-        event.preventDefault(); // Previne a rolagem durante o desenho
+        event.preventDefault();
 
         const coords = getCoords(event);
         if (!coords) return;
@@ -2171,13 +2190,9 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
         setIsDrawing(false);
     };
 
-    // --- MUDANÇA PRINCIPAL: useEffect para registrar os eventos manualmente ---
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-
-        // O objeto { passive: false } é a chave. Ele força o navegador
-        // a obedecer o event.preventDefault().
         const options = { passive: false };
 
         canvas.addEventListener('pointerdown', startDrawing, options);
@@ -2185,16 +2200,14 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
         canvas.addEventListener('pointerup', stopDrawing, options);
         canvas.addEventListener('pointerleave', stopDrawing, options);
 
-        // Função de limpeza: remove os listeners quando o componente é desmontado
         return () => {
             canvas.removeEventListener('pointerdown', startDrawing);
             canvas.removeEventListener('pointermove', draw);
             canvas.removeEventListener('pointerup', stopDrawing);
             canvas.removeEventListener('pointerleave', stopDrawing);
         };
-    }, [isDrawing, strokes, tool, color, lineWidth]); // Dependências para recriar os listeners se a lógica mudar
+    }, [isDrawing, strokes, tool, color, lineWidth, isScrollLocked]); // Adicionado isScrollLocked às dependências
 
-    // O useEffect para redesenhar e redimensionar permanece o mesmo
     useEffect(() => {
         const canvas = canvasRef.current;
         const context = canvas.getContext('2d');
@@ -2253,7 +2266,6 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
 
     return (
         <>
-            {/* --- MUDANÇA PRINCIPAL: Removemos os adereços onPointer... daqui --- */}
             <canvas
                 ref={canvasRef}
                 className="annotation-canvas"
@@ -2270,12 +2282,15 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
                 lineWidth={lineWidth}
                 onLineWidthChange={setLineWidth}
                 onSave={() => onSave(strokes)}
+                isScrollLocked={isScrollLocked}
+                onToggleScrollLock={onToggleScrollLock}
             />
         </>
     );
 };
 
 
+// --- MODIFICADO: SummaryDetailView agora gerencia o estado de bloqueio ---
 const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate, onGenerateFlashcards, onScheduleClass }) => {
     const [activeTab, setActiveTab] = useState('summary');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -2287,12 +2302,26 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
     const summaryContentRef = useRef(null);
     const [isAnnotationModalOpen, setAnnotationModalOpen] = useState(false);
 
+    // --- MODIFICADO: Adicionando estado de bloqueio de rolagem ---
+    const [isScrollLocked, setIsScrollLocked] = useState(false);
     const [isDrawingMode, setIsDrawingMode] = useState(false);
     const [drawingAnnotations, setDrawingAnnotations] = useState([]);
     const [isFetchingAnnotations, setIsFetchingAnnotations] = useState(false);
 
     const isAdminOrAmbassador = user.role === 'admin' || user.role === 'embaixador';
     const isStudent = user.role !== 'admin' && user.role !== 'embaixador';
+
+    // --- ADICIONADO: Efeito para travar a rolagem da página ---
+    useEffect(() => {
+        if (isScrollLocked) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [isScrollLocked]);
 
     useEffect(() => {
         if (!summary?.id || !user?.id) return;
@@ -2374,6 +2403,7 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
         setIsTocVisible(true);
         setAnnotationsPanelVisible(false);
         setIsDrawingMode(false);
+        setIsScrollLocked(false); // Garante que o bloqueio é resetado ao trocar de resumo
     }, [summary]);
 
     const handleGenerateQuiz = async () => {
@@ -2503,6 +2533,8 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
                                     containerRef={summaryContentRef}
                                     initialStrokes={drawingAnnotations}
                                     onSave={handleSaveDrawing}
+                                    isScrollLocked={isScrollLocked}
+                                    onToggleScrollLock={setIsScrollLocked}
                                 />
                             )}
                         </div>
