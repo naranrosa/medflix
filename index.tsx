@@ -529,8 +529,8 @@ const ThemeToggle = ({ theme, toggleTheme }) => (
     </div>
 );
 
-const IconButton = ({ onClick, children, className = '', disabled = false }) => (
-    <button className={`icon-btn ${className}`} onClick={(e) => { e.stopPropagation(); onClick(e); }} disabled={disabled}>
+const IconButton = ({ onClick, children, className = '', disabled = false, title = '' }) => (
+    <button className={`icon-btn ${className}`} onClick={(e) => { e.stopPropagation(); onClick(e); }} disabled={disabled} title={title}>
         {children}
     </button>
 );
@@ -2056,6 +2056,160 @@ const AnnotationsPanel = ({ summaryId, userId, refreshKey }) => {
     );
 };
 
+// --- NOVOS ÍCONES E COMPONENTES PARA ANOTAÇÃO DE DESENHO ---
+const EraserIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.42 4.58a2.12 2.12 0 0 0-3-3L5.42 15.58a2.12 2.12 0 0 0 0 3l7 7a2.12 2.12 0 0 0 3 0l5-5a2.12 2.12 0 0 0 0-3zM15 10.5l-5 5M12.5 5.5l5 5"></path></svg>;
+const SaveIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>;
+
+const AnnotationToolbar = ({ tool, onToolChange, color, onColorChange, onSave }) => {
+    const colors = ['#E63946', '#007BFF', '#2A9D8F', '#FFC300']; // Vermelho, Azul, Verde, Amarelo
+    const PenToolIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>;
+
+    return (
+        <div className="annotation-toolbar">
+            <IconButton onClick={() => onToolChange('pen')} className={tool === 'pen' ? 'active' : ''} title="Caneta">
+                <PenToolIcon />
+            </IconButton>
+            <IconButton onClick={() => onToolChange('eraser')} className={tool === 'eraser' ? 'active' : ''} title="Borracha">
+                <EraserIcon />
+            </IconButton>
+            <div style={{width: '2px', backgroundColor: 'var(--border-color)', margin: '0 0.5rem'}} />
+            {colors.map(c => (
+                <button
+                    key={c}
+                    className={`color-swatch-btn ${color === c && tool === 'pen' ? 'active' : ''}`}
+                    style={{ backgroundColor: c }}
+                    onClick={() => onColorChange(c)}
+                    title={`Cor ${c}`}
+                />
+            ))}
+            <div style={{width: '2px', backgroundColor: 'var(--border-color)', margin: '0 0.5rem'}} />
+            <IconButton onClick={onSave} title="Salvar Anotações">
+                <SaveIcon />
+            </IconButton>
+        </div>
+    );
+};
+
+const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
+    const canvasRef = useRef(null);
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [strokes, setStrokes] = useState(initialStrokes || []);
+    const [tool, setTool] = useState('pen');
+    const [color, setColor] = useState('#E63946');
+    const [lineWidth, setLineWidth] = useState(3);
+
+    const getCoords = (event) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top,
+        };
+    };
+
+    const startDrawing = (event) => {
+        const coords = getCoords(event);
+        if (!coords) return;
+        setIsDrawing(true);
+        const newStroke = {
+            tool,
+            color: tool === 'pen' ? color : '#FFFFFF',
+            lineWidth: tool === 'pen' ? lineWidth : 20,
+            points: [{ x: coords.x, y: coords.y, pressure: event.pressure || 0.5 }]
+        };
+        setStrokes(prev => [...prev, newStroke]);
+    };
+
+    const draw = (event) => {
+        if (!isDrawing) return;
+        const coords = getCoords(event);
+        if (!coords) return;
+        setStrokes(prev => {
+            const lastStroke = prev[prev.length - 1];
+            lastStroke.points.push({ x: coords.x, y: coords.y, pressure: event.pressure || 0.5 });
+            return [...prev];
+        });
+    };
+
+    const stopDrawing = () => {
+        setIsDrawing(false);
+    };
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        const context = canvas.getContext('2d');
+
+        const resizeCanvas = () => {
+            const container = containerRef.current;
+            if (container) {
+                canvas.width = container.offsetWidth;
+                canvas.height = container.offsetHeight;
+                redrawAll(context);
+            }
+        };
+
+        const redrawAll = (ctx) => {
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            strokes.forEach(stroke => {
+                ctx.beginPath();
+                ctx.strokeStyle = stroke.color;
+                ctx.lineWidth = stroke.lineWidth;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                if(stroke.tool === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+
+                if (stroke.points.length > 0) {
+                    ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+                    for (let i = 1; i < stroke.points.length; i++) {
+                        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+                    }
+                }
+                ctx.stroke();
+            });
+            ctx.globalCompositeOperation = 'source-over';
+        };
+
+        const resizeObserver = new ResizeObserver(resizeCanvas);
+        if (containerRef.current) {
+            resizeObserver.observe(containerRef.current);
+        }
+
+        resizeCanvas();
+
+        return () => {
+            if (containerRef.current) {
+                resizeObserver.unobserve(containerRef.current);
+            }
+        };
+    }, [strokes, containerRef]);
+
+    return (
+        <>
+            <canvas
+                ref={canvasRef}
+                className="annotation-canvas"
+                onPointerDown={startDrawing}
+                onPointerMove={draw}
+                onPointerUp={stopDrawing}
+                onPointerLeave={stopDrawing}
+            />
+            <AnnotationToolbar
+                tool={tool}
+                onToolChange={setTool}
+                color={color}
+                onColorChange={setColor}
+                onSave={() => onSave(strokes)}
+            />
+        </>
+    );
+};
+
 
 const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz, onToggleComplete, isCompleted, onGetExplanation, user, onAIUpdate, onGenerateFlashcards, onScheduleClass }) => {
     const [activeTab, setActiveTab] = useState('summary');
@@ -2068,10 +2222,65 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
     const summaryContentRef = useRef(null);
     const [isAnnotationModalOpen, setAnnotationModalOpen] = useState(false);
 
+    // --- NOVO ESTADO PARA O MODO DE DESENHO ---
+    const [isDrawingMode, setIsDrawingMode] = useState(false);
+    const [drawingAnnotations, setDrawingAnnotations] = useState([]);
+    const [isFetchingAnnotations, setIsFetchingAnnotations] = useState(false);
+
+    const isAdminOrAmbassador = user.role === 'admin' || user.role === 'embaixador';
+    const isStudent = user.role !== 'admin' && user.role !== 'embaixador';
+
+    // --- NOVO: BUSCAR ANOTAÇÕES DE DESENHO QUANDO O COMPONENTE CARREGA ---
+    useEffect(() => {
+        if (!summary?.id || !user?.id) return;
+
+        const fetchDrawingAnnotations = async () => {
+            setIsFetchingAnnotations(true);
+            const { data, error } = await supabase
+                .from('user_drawing_annotations')
+                .select('strokes_data')
+                .eq('user_id', user.id)
+                .eq('summary_id', summary.id)
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                console.error("Erro ao buscar anotações de desenho:", error);
+            } else if (data) {
+                setDrawingAnnotations(data.strokes_data || []);
+            } else {
+                setDrawingAnnotations([]);
+            }
+            setIsFetchingAnnotations(false);
+        };
+
+        fetchDrawingAnnotations();
+    }, [summary, user]);
+
+    // --- NOVA FUNÇÃO PARA SALVAR O DESENHO ---
+    const handleSaveDrawing = async (strokes) => {
+        if (!summary?.id || !user?.id) return;
+        try {
+            const { error } = await supabase
+                .from('user_drawing_annotations')
+                .upsert({
+                    user_id: user.id,
+                    summary_id: summary.id,
+                    strokes_data: strokes
+                }, { onConflict: 'user_id, summary_id' });
+
+            if (error) throw error;
+            setDrawingAnnotations(strokes);
+            alert("Anotações salvas!");
+        } catch (error) {
+            console.error("Falha ao salvar anotações de desenho:", error);
+            alert("Erro ao salvar anotações.");
+        }
+    };
+
     const handleMouseUp = () => {
         const currentSelection = window.getSelection();
         const selectedText = currentSelection?.toString().trim();
-        if (selectedText && selectedText.length > 5) { // Evita pop-ups para cliques simples
+        if (selectedText && selectedText.length > 5) {
             const rect = currentSelection.getRangeAt(0).getBoundingClientRect();
             setSelection({
                 text: selectedText,
@@ -2095,16 +2304,14 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
         } else {
             setAnnotationModalOpen(false);
             setSelection({ text: '', x: 0, y: 0 });
-            setAnnotationRefreshKey(prev => prev + 1); // Força a atualização do painel
+            setAnnotationRefreshKey(prev => prev + 1);
         }
     };
-
-    const isAdminOrAmbassador = user.role === 'admin' || user.role === 'embaixador';
-    const isStudent = user.role !== 'admin' && user.role !== 'embaixador';
 
     useEffect(() => {
         setIsTocVisible(true);
         setAnnotationsPanelVisible(false);
+        setIsDrawingMode(false);
     }, [summary]);
 
     const handleGenerateQuiz = async () => {
@@ -2129,6 +2336,8 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
         { id: 'flashcards', label: 'Flashcards', condition: (summary.flashcards?.length > 0) || isAdminOrAmbassador },
         { id: 'questions', label: 'Questões', condition: (summary.questions?.length > 0) || isAdminOrAmbassador }
     ].filter(tab => tab.condition);
+
+    const PenToolIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>;
 
     return (
         <div className="summary-detail-layout">
@@ -2167,11 +2376,14 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
                 <div className="summary-header">
                     {activeTab === 'summary' && (
                         <div className="summary-view-toggles">
-                            <IconButton onClick={() => setIsTocVisible(p => !p)} className={`toc-toggle-btn ${isTocVisible ? 'active' : ''}`}>
+                            <IconButton onClick={() => setIsTocVisible(p => !p)} className={`toc-toggle-btn ${isTocVisible ? 'active' : ''}`} title="Índice">
                                 <ListIcon />
                             </IconButton>
-                             <IconButton onClick={() => setAnnotationsPanelVisible(p => !p)} className={`toc-toggle-btn ${isAnnotationsPanelVisible ? 'active' : ''}`}>
+                             <IconButton onClick={() => setAnnotationsPanelVisible(p => !p)} className={`toc-toggle-btn ${isAnnotationsPanelVisible ? 'active' : ''}`} title="Anotações de Texto">
                                 <ClipboardIcon />
+                            </IconButton>
+                            <IconButton onClick={() => setIsDrawingMode(p => !p)} className={`toc-toggle-btn ${isDrawingMode ? 'active' : ''}`} title="Modo de Desenho">
+                                <PenToolIcon />
                             </IconButton>
                         </div>
                     )}
@@ -2220,10 +2432,18 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
                         role="tabpanel"
                         className={`summary-content ${activeTab === 'summary' ? '' : 'hidden'}`}
                         style={{ '--subject-color': subject?.color || '#6c757d' }}
-                        ref={summaryContentRef}
                         onMouseUp={handleMouseUp}
                     >
+                        <div className="annotation-container" ref={summaryContentRef}>
                             <div dangerouslySetInnerHTML={{ __html: summary.content }} />
+                            {isDrawingMode && !isFetchingAnnotations && (
+                                <CanvasAnnotationLayer
+                                    containerRef={summaryContentRef}
+                                    initialStrokes={drawingAnnotations}
+                                    onSave={handleSaveDrawing}
+                                />
+                            )}
+                        </div>
                     </div>
 
                     <div id="tab-panel-video" role="tabpanel" className={activeTab === 'video' ? '' : 'hidden'}>
