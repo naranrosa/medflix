@@ -2121,6 +2121,7 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
     const [color, setColor] = useState('#E63946');
     const [lineWidth, setLineWidth] = useState(3);
 
+    // As funções de lógica interna permanecem as mesmas
     const getCoords = (event) => {
         const canvas = canvasRef.current;
         if (!canvas) return null;
@@ -2132,21 +2133,16 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
     };
 
     const startDrawing = (event) => {
-        if (event.pointerType !== 'pen') {
-            return;
-        }
-        event.preventDefault();
+        if (event.pointerType !== 'pen') return;
+        event.preventDefault(); // Previne a rolagem
 
         const coords = getCoords(event);
         if (!coords) return;
         setIsDrawing(true);
 
         let currentLineWidth = lineWidth;
-        if (tool === 'highlighter') {
-            currentLineWidth = 20;
-        } else if (tool === 'eraser') {
-            currentLineWidth = 25;
-        }
+        if (tool === 'highlighter') currentLineWidth = 20;
+        else if (tool === 'eraser') currentLineWidth = 25;
 
         const newStroke = {
             tool,
@@ -2159,7 +2155,7 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
 
     const draw = (event) => {
         if (!isDrawing) return;
-        event.preventDefault();
+        event.preventDefault(); // Previne a rolagem durante o desenho
 
         const coords = getCoords(event);
         if (!coords) return;
@@ -2175,13 +2171,36 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
         setIsDrawing(false);
     };
 
+    // --- MUDANÇA PRINCIPAL: useEffect para registrar os eventos manualmente ---
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        // O objeto { passive: false } é a chave. Ele força o navegador
+        // a obedecer o event.preventDefault().
+        const options = { passive: false };
+
+        canvas.addEventListener('pointerdown', startDrawing, options);
+        canvas.addEventListener('pointermove', draw, options);
+        canvas.addEventListener('pointerup', stopDrawing, options);
+        canvas.addEventListener('pointerleave', stopDrawing, options);
+
+        // Função de limpeza: remove os listeners quando o componente é desmontado
+        return () => {
+            canvas.removeEventListener('pointerdown', startDrawing);
+            canvas.removeEventListener('pointermove', draw);
+            canvas.removeEventListener('pointerup', stopDrawing);
+            canvas.removeEventListener('pointerleave', stopDrawing);
+        };
+    }, [isDrawing, strokes, tool, color, lineWidth]); // Dependências para recriar os listeners se a lógica mudar
+
+    // O useEffect para redesenhar e redimensionar permanece o mesmo
     useEffect(() => {
         const canvas = canvasRef.current;
         const context = canvas.getContext('2d');
 
         const redrawAll = (ctx) => {
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
             strokes.forEach(stroke => {
                 ctx.beginPath();
                 ctx.strokeStyle = stroke.color;
@@ -2195,7 +2214,7 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
                 } else if (stroke.tool === 'eraser') {
                     ctx.globalAlpha = 1.0;
                     ctx.globalCompositeOperation = 'destination-out';
-                } else { // 'pen'
+                } else {
                     ctx.globalAlpha = 1.0;
                     ctx.globalCompositeOperation = 'source-over';
                 }
@@ -2222,28 +2241,22 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
         };
 
         const resizeObserver = new ResizeObserver(resizeCanvas);
-        if (containerRef.current) {
-            resizeObserver.observe(containerRef.current);
-        }
+        if (containerRef.current) resizeObserver.observe(containerRef.current);
 
         resizeCanvas();
 
         return () => {
-            if (containerRef.current) {
-                resizeObserver.unobserve(containerRef.current);
-            }
+            if (containerRef.current) resizeObserver.unobserve(containerRef.current);
         };
     }, [strokes, containerRef]);
 
+
     return (
         <>
+            {/* --- MUDANÇA PRINCIPAL: Removemos os adereços onPointer... daqui --- */}
             <canvas
                 ref={canvasRef}
                 className="annotation-canvas"
-                onPointerDown={startDrawing}
-                onPointerMove={draw}
-                onPointerUp={stopDrawing}
-                onPointerLeave={stopDrawing}
             />
             <AnnotationToolbar
                 tool={tool}
