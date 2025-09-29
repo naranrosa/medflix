@@ -2059,9 +2059,10 @@ const AnnotationsPanel = ({ summaryId, userId, refreshKey }) => {
 // --- NOVOS ÍCONES E COMPONENTES PARA ANOTAÇÃO DE DESENHO ---
 const EraserIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.42 4.58a2.12 2.12 0 0 0-3-3L5.42 15.58a2.12 2.12 0 0 0 0 3l7 7a2.12 2.12 0 0 0 3 0l5-5a2.12 2.12 0 0 0 0-3zM15 10.5l-5 5M12.5 5.5l5 5"></path></svg>;
 const SaveIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>;
+const HighlighterIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13.5 2H10a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5L13.5 2z"></path><polyline points="13 2 13 9 20 9"></polyline><path d="M4 22h7"></path></svg>;
 
-const AnnotationToolbar = ({ tool, onToolChange, color, onColorChange, onSave }) => {
-    const colors = ['#E63946', '#007BFF', '#2A9D8F', '#FFC300']; // Vermelho, Azul, Verde, Amarelo
+const AnnotationToolbar = ({ tool, onToolChange, color, onColorChange, lineWidth, onLineWidthChange, onSave }) => {
+    const colors = ['#E63946', '#007BFF', '#2A9D8F', '#FFC300', '#8338EC', '#FF006E'];
     const PenToolIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>;
 
     return (
@@ -2069,20 +2070,42 @@ const AnnotationToolbar = ({ tool, onToolChange, color, onColorChange, onSave })
             <IconButton onClick={() => onToolChange('pen')} className={tool === 'pen' ? 'active' : ''} title="Caneta">
                 <PenToolIcon />
             </IconButton>
+            <IconButton onClick={() => onToolChange('highlighter')} className={tool === 'highlighter' ? 'active' : ''} title="Marca-Texto">
+                <HighlighterIcon />
+            </IconButton>
             <IconButton onClick={() => onToolChange('eraser')} className={tool === 'eraser' ? 'active' : ''} title="Borracha">
                 <EraserIcon />
             </IconButton>
-            <div style={{width: '2px', backgroundColor: 'var(--border-color)', margin: '0 0.5rem'}} />
+
+            <div className="toolbar-separator" />
             {colors.map(c => (
                 <button
                     key={c}
-                    className={`color-swatch-btn ${color === c && tool === 'pen' ? 'active' : ''}`}
+                    className={`color-swatch-btn ${color === c && (tool === 'pen' || tool === 'highlighter') ? 'active' : ''}`}
                     style={{ backgroundColor: c }}
                     onClick={() => onColorChange(c)}
                     title={`Cor ${c}`}
                 />
             ))}
-            <div style={{width: '2px', backgroundColor: 'var(--border-color)', margin: '0 0.5rem'}} />
+
+            {(tool === 'pen' || tool === 'highlighter') && (
+                <>
+                    <div className="toolbar-separator" />
+                    <div className="thickness-slider-container">
+                        <input
+                            type="range"
+                            min="1"
+                            max={tool === 'pen' ? "10" : "25"}
+                            value={lineWidth}
+                            onChange={(e) => onLineWidthChange(Number(e.target.value))}
+                            className="thickness-slider"
+                            title={`Espessura: ${lineWidth}px`}
+                        />
+                    </div>
+                </>
+            )}
+
+            <div className="toolbar-separator" />
             <IconButton onClick={onSave} title="Salvar Anotações">
                 <SaveIcon />
             </IconButton>
@@ -2109,23 +2132,26 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
     };
 
     const startDrawing = (event) => {
-        // A verificação que já fizemos continua aqui
         if (event.pointerType !== 'pen') {
             return;
         }
-
-        // --- ADICIONE ESTA LINHA ---
-        // Impede o navegador de realizar a ação padrão (rolar a página)
         event.preventDefault();
 
-        // O resto da função continua exatamente igual
         const coords = getCoords(event);
         if (!coords) return;
         setIsDrawing(true);
+
+        let currentLineWidth = lineWidth;
+        if (tool === 'highlighter') {
+            currentLineWidth = 20;
+        } else if (tool === 'eraser') {
+            currentLineWidth = 25;
+        }
+
         const newStroke = {
             tool,
-            color: tool === 'pen' ? color : '#FFFFFF',
-            lineWidth: tool === 'pen' ? lineWidth : 20,
+            color,
+            lineWidth: currentLineWidth,
             points: [{ x: coords.x, y: coords.y, pressure: event.pressure || 0.5 }]
         };
         setStrokes(prev => [...prev, newStroke]);
@@ -2133,18 +2159,15 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
 
     const draw = (event) => {
         if (!isDrawing) return;
-
-        // --- ADICIONE ESTA LINHA TAMBÉM ---
-        // Garante que a rolagem não ocorra enquanto o traço está sendo feito
         event.preventDefault();
 
-        // O resto da função continua exatamente igual
         const coords = getCoords(event);
         if (!coords) return;
         setStrokes(prev => {
-            const lastStroke = prev[prev.length - 1];
+            const currentStrokes = [...prev];
+            const lastStroke = currentStrokes[currentStrokes.length - 1];
             lastStroke.points.push({ x: coords.x, y: coords.y, pressure: event.pressure || 0.5 });
-            return [...prev];
+            return currentStrokes;
         });
     };
 
@@ -2156,17 +2179,9 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
         const canvas = canvasRef.current;
         const context = canvas.getContext('2d');
 
-        const resizeCanvas = () => {
-            const container = containerRef.current;
-            if (container) {
-                canvas.width = container.offsetWidth;
-                canvas.height = container.offsetHeight;
-                redrawAll(context);
-            }
-        };
-
         const redrawAll = (ctx) => {
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
             strokes.forEach(stroke => {
                 ctx.beginPath();
                 ctx.strokeStyle = stroke.color;
@@ -2174,9 +2189,14 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
 
-                if(stroke.tool === 'eraser') {
+                if (stroke.tool === 'highlighter') {
+                    ctx.globalAlpha = 0.4;
+                    ctx.globalCompositeOperation = 'source-over';
+                } else if (stroke.tool === 'eraser') {
+                    ctx.globalAlpha = 1.0;
                     ctx.globalCompositeOperation = 'destination-out';
-                } else {
+                } else { // 'pen'
+                    ctx.globalAlpha = 1.0;
                     ctx.globalCompositeOperation = 'source-over';
                 }
 
@@ -2188,7 +2208,17 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
                 }
                 ctx.stroke();
             });
+            ctx.globalAlpha = 1.0;
             ctx.globalCompositeOperation = 'source-over';
+        };
+
+        const resizeCanvas = () => {
+            const container = containerRef.current;
+            if (container) {
+                canvas.width = container.offsetWidth;
+                canvas.height = container.offsetHeight;
+                redrawAll(context);
+            }
         };
 
         const resizeObserver = new ResizeObserver(resizeCanvas);
@@ -2217,9 +2247,15 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
             />
             <AnnotationToolbar
                 tool={tool}
-                onToolChange={setTool}
+                onToolChange={(newTool) => {
+                    setTool(newTool);
+                    if (newTool === 'pen') setLineWidth(3);
+                    else if (newTool === 'highlighter') setLineWidth(20);
+                }}
                 color={color}
                 onColorChange={setColor}
+                lineWidth={lineWidth}
+                onLineWidthChange={setLineWidth}
                 onSave={() => onSave(strokes)}
             />
         </>
@@ -2238,7 +2274,6 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
     const summaryContentRef = useRef(null);
     const [isAnnotationModalOpen, setAnnotationModalOpen] = useState(false);
 
-    // --- NOVO ESTADO PARA O MODO DE DESENHO ---
     const [isDrawingMode, setIsDrawingMode] = useState(false);
     const [drawingAnnotations, setDrawingAnnotations] = useState([]);
     const [isFetchingAnnotations, setIsFetchingAnnotations] = useState(false);
@@ -2246,7 +2281,6 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
     const isAdminOrAmbassador = user.role === 'admin' || user.role === 'embaixador';
     const isStudent = user.role !== 'admin' && user.role !== 'embaixador';
 
-    // --- NOVO: BUSCAR ANOTAÇÕES DE DESENHO QUANDO O COMPONENTE CARREGA ---
     useEffect(() => {
         if (!summary?.id || !user?.id) return;
 
@@ -2272,7 +2306,6 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
         fetchDrawingAnnotations();
     }, [summary, user]);
 
-    // --- NOVA FUNÇÃO PARA SALVAR O DESENHO ---
     const handleSaveDrawing = async (strokes) => {
         if (!summary?.id || !user?.id) return;
         try {
@@ -2288,7 +2321,7 @@ const SummaryDetailView = ({ summary, subject, onEdit, onDelete, onGenerateQuiz,
             setDrawingAnnotations(strokes);
             alert("Anotações salvas!");
         } catch (error) {
-            console.error("Falha ao salvar anotações de desenho:", error);
+            console.error("Falha ao salvar anotações de desenho:", error.message, error);
             alert("Erro ao salvar anotações.");
         }
     };
