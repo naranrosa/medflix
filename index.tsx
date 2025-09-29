@@ -2121,7 +2121,7 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
     const [color, setColor] = useState('#E63946');
     const [lineWidth, setLineWidth] = useState(3);
 
-    // As funções de lógica interna permanecem as mesmas
+    // As funções de lógica interna (getCoords, startDrawing, etc.) permanecem as mesmas
     const getCoords = (event) => {
         const canvas = canvasRef.current;
         if (!canvas) return null;
