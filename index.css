@@ -3629,3 +3629,50 @@ body.light-mode {
   border-color: var(--primary-accent);
   box-shadow: 0 0 0 2px var(--primary-accent);
 }
+/* Em index.css, adicione estes estilos no final da seção de anotações */
+
+.annotation-toolbar {
+  align-items: center; /* Alinha verticalmente os itens da toolbar */
+}
+
+.toolbar-separator {
+  width: 1px;
+  height: 24px;
+  background-color: var(--border-color);
+  margin: 0 0.75rem;
+}
+
+.thickness-slider-container {
+  display: flex;
+  align-items: center;
+  padding: 0 0.5rem;
+}
+
+.thickness-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100px;
+  height: 5px;
+  background: var(--border-color);
+  outline: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.thickness-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--primary-accent);
+  border-radius: 50%;
+  border: 2px solid var(--card-color);
+}
+
+.thickness-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: var(--primary-accent);
+  border-radius: 50%;
+  border: 2px solid var(--card-color);
+}
