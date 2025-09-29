@@ -2109,29 +2109,36 @@ const CanvasAnnotationLayer = ({ containerRef, initialStrokes, onSave }) => {
     };
 
     const startDrawing = (event) => {
-    // PASSO 1: Verificamos o tipo de ponteiro que disparou o evento.
-    if (event.pointerType !== 'pen') {
-        // Se NÃO FOR uma caneta (pode ser 'touch' ou 'mouse'),
-        // nós NÃO iniciamos o desenho. Simplesmente saímos da função.
-        return;
-    }
+        // A verificação que já fizemos continua aqui
+        if (event.pointerType !== 'pen') {
+            return;
+        }
 
-    // Se o código chegou até aqui, significa que é uma caneta.
-    // O resto da função continua como antes.
-    const coords = getCoords(event);
-    if (!coords) return;
-    setIsDrawing(true);
-    const newStroke = {
-        tool,
-        color: tool === 'pen' ? color : '#FFFFFF', // Cor da borracha é irrelevante
-        lineWidth: tool === 'pen' ? lineWidth : 20, // Borracha mais grossa
-        points: [{ x: coords.x, y: coords.y, pressure: event.pressure || 0.5 }]
+        // --- ADICIONE ESTA LINHA ---
+        // Impede o navegador de realizar a ação padrão (rolar a página)
+        event.preventDefault();
+
+        // O resto da função continua exatamente igual
+        const coords = getCoords(event);
+        if (!coords) return;
+        setIsDrawing(true);
+        const newStroke = {
+            tool,
+            color: tool === 'pen' ? color : '#FFFFFF',
+            lineWidth: tool === 'pen' ? lineWidth : 20,
+            points: [{ x: coords.x, y: coords.y, pressure: event.pressure || 0.5 }]
+        };
+        setStrokes(prev => [...prev, newStroke]);
     };
-    setStrokes(prev => [...prev, newStroke]);
-};
 
     const draw = (event) => {
         if (!isDrawing) return;
+
+        // --- ADICIONE ESTA LINHA TAMBÉM ---
+        // Garante que a rolagem não ocorra enquanto o traço está sendo feito
+        event.preventDefault();
+
+        // O resto da função continua exatamente igual
         const coords = getCoords(event);
         if (!coords) return;
         setStrokes(prev => {
