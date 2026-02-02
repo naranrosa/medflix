@@ -3490,7 +3490,7 @@ const App = () => {
 **TAREFA:** Gere um quiz de múltipla escolha baseado no resumo fornecido.
 
 **DIRETRIZES TÉCNICAS:**
-1. **Dificuldade:** As questões devem ser de nível médio a difícil, priorizando casos clínicos complexos em vez de perguntas conceituais diretas.
+1. **Dificuldade:** As questões devem ser de nível difícil, priorizando exclusivamente casos clínicos complexos em vez de perguntas conceituais diretas.
 2. **Estilo ENARE:** Use enunciados que descrevam um quadro clínico (anamnese, exame físico, exames complementares) e exijam a conduta mais adequada, diagnóstico ou fisiopatologia.
 3. **Volume Dinâmico:** - Analise a relevância epidemiológica e a complexidade do conteúdo abaixo.
    - Se o tema for de baixa gravidade/importância clínica: gere 20 questões.
