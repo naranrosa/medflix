@@ -821,11 +821,41 @@ const AIEnhancementModal = ({ onClose, onContentEnhanced }) => {
         setError('');
         setLoadingMessage('Aprimorando o texto com IA...');
         try {
-const prompt = `Você é um especialista em redação acadêmica e médica. Sua tarefa é aprimorar o texto a seguir, tornando-o mais claro, conciso e profissional.
-Reestruture as frases para melhor fluidez, corrija erros gramaticais e de estilo, e organize o conteúdo de forma lógica.
-Formate o resultado final em HTML bem formado, usando títulos (<h2>, <h3>), parágrafos (<p>), listas (<ul>, <li>) e outras tags relevantes para garantir uma excelente legibilidade. Não inclua a tag <h1>.
+const prompt = `
+Atue como um Editor Sênior de Material Didático e Especialista em Conteúdo Técnico (Área da Saúde e Direito).
 
-**Texto para aprimorar:**
+### Objetivo
+Sua tarefa é receber fragmentos de texto formatados em HTML, revisá-los e transformá-los em um material didático visualmente padronizado, garantindo precisão técnica, fluidez acadêmica e design limpo.
+
+### Instruções de Execução:
+1. **Preservação e Estrutura:**
+   - Mantenha a hierarquia lógica (títulos e subtítulos).
+   - Se houver necessidade de imagens contextuais, insira placeholders no formato "[IMAGEM: Descrição do contexto da imagem]".
+
+2. **Aprimoramento de Conteúdo:**
+   - Reescreva para tom formal e educativo.
+   - Atualize diretrizes (SBC, AHA, Leis, KDIGO) quando aplicável.
+   - Complete raciocínios cortados logicamente.
+
+3. **IDENTIDADE VISUAL OBRIGATÓRIA (CSS INLINE):**
+Você deve aplicar o seguinte padrão de design em todo o documento. Não use classes externas, aplique style="..." diretamente nas tags.
+
+* **Body/Geral:** Fonte: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f9f9f9; max-width: 1200px; margin: auto;
+* **Cabeçalho Principal (H1 e H2):** - Container (div): background-color: #003366; padding: 40px; border-radius: 8px 8px 0 0; margin-bottom: 30px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    - Texto: color: #ffffff;
+* **Blocos de Conteúdo (Sections):** background-color: #fff; padding: 30px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+* **Títulos de Seção Internos (H3):** background-color: #1a3b5c; color: #ffffff !important; padding: 15px; border-left: 8px solid #d9534f; border-radius: 4px; margin-top: 0;
+
+4. **Tabelas (Proporção Inteligente):**
+   - Envelopamento: <div style="overflow-x: auto; width: 100%;">
+   - Cabeçalho (th): background-color: #003366; color: #ffffff; padding: 12px; border: 1px solid #ddd;
+   - Célula Curta/Rótulo (td): padding: 12px; border: 1px solid #ddd; background-color: #f2f2f2; font-weight: bold; width: 1%; white-space: nowrap; min-width: 120px;
+   - Célula de Conteúdo (td): padding: 12px; min-width: 250px; border: 1px solid #ddd; vertical-align: top;
+
+### Formatação de Saída:
+Entregue apenas o código HTML finalizado dentro de um bloco de código. Não inclua explicações ou scripts adicionais.
+
+**Input do Usuário (HTML):**
 """
 ${textContent}
 """`;
