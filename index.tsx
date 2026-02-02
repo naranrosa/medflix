@@ -3493,7 +3493,7 @@ const App = () => {
 1. **Dificuldade:** As questões devem ser de nível médio a difícil, priorizando casos clínicos complexos em vez de perguntas conceituais diretas.
 2. **Estilo ENARE:** Use enunciados que descrevam um quadro clínico (anamnese, exame físico, exames complementares) e exijam a conduta mais adequada, diagnóstico ou fisiopatologia.
 3. **Volume Dinâmico:** - Analise a relevância epidemiológica e a complexidade do conteúdo abaixo.
-   - Se o tema for de baixa gravidade/importância clínica: gere 10 questões.
+   - Se o tema for de baixa gravidade/importância clínica: gere 20 questões.
    - Conforme a importância e o volume de informações aumentarem, aumente a quantidade, podendo chegar a até 50 questões para temas extensos e vitais.
 4. **Alternativas:** Devem ser 4 alternativas (A, B, C, D). Os distratores devem ser plausíveis, baseados em erros comuns de diagnóstico ou condutas desatualizadas.
 
