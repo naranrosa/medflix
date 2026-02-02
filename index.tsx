@@ -9,7 +9,7 @@ const supabaseUrl = 'https://vylpdfeqdylcqxzllnbh.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5bHBkZmVxZHlsY3F4emxsbmJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxNjY3NzMsImV4cCI6MjA3Mjc0Mjc3M30.muT9yFZaHottkDM-acc6iU5XHqbo7yqTF-bpPoAotMY';
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// --- DADOS MOCADOS (APENAS PARA PREENCHER A INTERFACE INICIALMENTE) ---
+// --- DADOS MOCADOS ---
 const initialTerms = Array.from({ length: 12 }, (_, i) => ({
     id: `t${i + 1}`,
     name: `${i + 1}º Termo`,
@@ -24,11 +24,11 @@ const ai = new GoogleGenAI({ apiKey: API_KEY });
 const model = "gemini-2.5-flash";
 
 /**
- * Encapsula a chamada da API GenAI com uma lógica de retry para erros 503 (servidor sobrecarregado).
- * @param {string} prompt O prompt a ser enviado para o modelo.
- * @param {object} schema O schema de resposta esperado.
- * @param {number} maxRetries O número máximo de tentativas.
- * @returns {Promise<object>} O JSON parseado da resposta da IA.
+ * Encapsula a chamada da API GenAI com uma lógica de retry para erros 503
+ * @param {string} prompt
+ * @param {object} schema
+ * @param {number} maxRetries
+ * @returns {Promise<object>}
  */
 const generateAIContentWithRetry = async (prompt, schema, maxRetries = 4) => {
     let attempt = 0;
@@ -409,7 +409,7 @@ const QuizView = ({ questions, onGetExplanation, summaryId, userId, isMockExam =
 
     // --- Lógica para registrar as tentativas do quiz ---
     const logAttempt = async (question, isCorrect) => {
-        if (isMockExam || !userId || !summaryId) return; // Não registrar tentativas de simulados
+        if (isMockExam || !userId || !summaryId) return;
         try {
             await supabase.from('user_quiz_attempts').upsert({
                 user_id: userId,
@@ -1647,7 +1647,6 @@ const SummaryModal = ({ isOpen, onClose, onSave, summary, subjectId }) => {
     );
 };
 
-// --- ATUALIZADO: `SummaryListView` agora inclui o botão para abrir o modal do simulado ---
 const SummaryListView = ({ subject, summaries, onSelectSummary, onAddSummary, onEditSummary, onDeleteSummary, user, completedSummaries, onAISplit, onReorderSummaries, onGenerateFlashcardsForAll, onGenerateQuizForAll, isBatchLoading, batchLoadingMessage, onOpenMockExamModal }) => {
     const handleDragEnd = (result) => {
         const { destination, source } = result;
@@ -1818,13 +1817,12 @@ const FlashcardView = ({ flashcards, summaryId, userId }) => {
         }
     };
 
-    // --- FUNÇÃO ATUALIZADA ---
+    // --- FUNÇÃO ---
     const handleAnswer = async (knows) => {
         const currentCard = reviewDeck[currentIndex];
         const currentSrsRecord = srsData?.get(currentCard.front);
         const newSrsData = calculateSrs(currentSrsRecord, knows);
 
-        // A lógica de salvar no Supabase e atualizar o estado do SRS permanece a mesma.
         await supabase.from('user_flashcard_srs').upsert({
             user_id: userId,
             summary_id: summaryId,
@@ -1833,38 +1831,26 @@ const FlashcardView = ({ flashcards, summaryId, userId }) => {
         });
         setSrsData(prev => new Map(prev).set(currentCard.front, newSrsData));
 
-        // Vira o card de volta antes da transição.
         setIsFlipped(false);
 
-        // Atraso para permitir que a animação de virar o card aconteça.
         setTimeout(() => {
             if (knows) {
-                // Se o usuário acertou, o card é removido do baralho desta sessão.
                 const newDeck = reviewDeck.filter((_, index) => index !== currentIndex);
                 setReviewDeck(newDeck);
 
                 if (newDeck.length === 0) {
                     setIsFinished(true);
                 } else if (currentIndex >= newDeck.length) {
-                    // Caso o card removido fosse o último da lista, volta para o início.
                     setCurrentIndex(0);
                 }
-                // Se não for o último, o próximo card naturalmente ocupará o `currentIndex` atual,
-                // então não é necessário alterar o índice.
 
             } else {
-                // Se o usuário errou, o card vai para o final do baralho.
-                // Criamos um novo array com o card atual movido para o fim.
                 const newDeck = [...reviewDeck.slice(0, currentIndex), ...reviewDeck.slice(currentIndex + 1), currentCard];
                 setReviewDeck(newDeck);
 
-                // Se o card movido era o último da lista, o índice deve ser resetado para 0
-                // para evitar que o índice fique fora dos limites do novo array.
                 if (currentIndex >= newDeck.length) {
                      setCurrentIndex(0);
                 }
-                // Se não for o último card, o próximo item assumirá o índice atual
-                // e a revisão continua naturalmente, sem alterar o índice.
             }
         }, 300);
     };
@@ -3498,7 +3484,25 @@ const App = () => {
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
     try {
-        const prompt = `Você é um especialista em criar questões para provas de residência médica... Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`;
+        const prompt = `
+**PAPEL:** Você é um elaborador de questões de alto nível para bancas de residência médica, especificamente no padrão ENARE e Enamed.
+
+**TAREFA:** Gere um quiz de múltipla escolha baseado no resumo fornecido.
+
+**DIRETRIZES TÉCNICAS:**
+1. **Dificuldade:** As questões devem ser de nível médio a difícil, priorizando casos clínicos complexos em vez de perguntas conceituais diretas.
+2. **Estilo ENARE:** Use enunciados que descrevam um quadro clínico (anamnese, exame físico, exames complementares) e exijam a conduta mais adequada, diagnóstico ou fisiopatologia.
+3. **Volume Dinâmico:** - Analise a relevância epidemiológica e a complexidade do conteúdo abaixo.
+   - Se o tema for de baixa gravidade/importância clínica: gere 10 questões.
+   - Conforme a importância e o volume de informações aumentarem, aumente a quantidade, podendo chegar a até 50 questões para temas extensos e vitais.
+4. **Alternativas:** Devem ser 4 alternativas (A, B, C, D). Os distratores devem ser plausíveis, baseados em erros comuns de diagnóstico ou condutas desatualizadas.
+
+**RESUMO PARA ANÁLISE:**
+"""
+${summary.content.replace(/<[^>]*>?/gm, ' ')}
+"""
+
+**SAÍDA:** Retorne estritamente o JSON conforme o schema solicitado.`;
         const parsedJson = await generateAIContentWithRetry(prompt, quizSchema);
         const { data, error } = await supabase.from('summaries').update({ questions: parsedJson.questions }).eq('id', currentSummaryId).select().single();
         if (error) throw error;
