@@ -21,7 +21,7 @@ if (!API_KEY) {
   throw new Error("API_KEY environment variable not set");
 }
 const ai = new GoogleGenAI({ apiKey: API_KEY });
-const model = "gemini-3-flash-preview";
+const model = "gemini-2.5-flash";
 
 /**
  * Encapsula a chamada da API GenAI com uma lógica de retry para erros 503
@@ -711,7 +711,7 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
                 const base64Audio = await fileToBase64(audioFile);
 
                 const transcription = await ai.models.generateContent({
-                    model: "gemini-3-flash-preview",
+                    model: "gemini-2.5-flash",
                     contents: [
                         { role: "user", parts: [{ text: "Transcreva este áudio para texto em português médico-acadêmico:" }, { inlineData: { mimeType: audioFile.type, data: base64Audio } }] }
                     ]
