@@ -588,7 +588,7 @@ const LoginScreen = ({ theme, toggleTheme }) => {
                 }
             });
             if (signUpError) throw signUpError;
-            const mercadoPagoCheckoutUrl = 'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=bfeb57b445184aa080956efd504fcf6b';
+            const mercadoPagoCheckoutUrl = 'https://buy.stripe.com/dRmbJ20jYdu02ZKg9l1sQ00';
             window.location.href = mercadoPagoCheckoutUrl;
 
         } else {
@@ -621,7 +621,6 @@ const LoginScreen = ({ theme, toggleTheme }) => {
 
   return (
     <div className="login-screen">
-      <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
       <div className="login-card">
         <h1>Med<span>flix</span></h1>
         <p>{isSignUp ? 'Crie sua conta para começar' : 'Faça login para continuar'}</p>
@@ -730,19 +729,80 @@ const AIUpdateModal = ({ onClose, onUpdate, summary }) => {
 
             setLoadingMessage('Atualizando o resumo com as novas informações...');
 
-const updatePrompt = `Você é um especialista em redação médica e acadêmica. Sua tarefa é integrar de forma inteligente novas informações a um resumo existente sobre o mesmo tópico.
-Analise o resumo original e as novas informações fornecidas. Reestruture, reescreva e combine os textos para criar uma versão final aprimorada, coesa e bem organizada. Corrija quaisquer inconsistências e melhore a clareza.
-O resultado final DEVE ser um único bloco de conteúdo em formato HTML bem formado, utilizando tags como <h2>, <h3>, <p>, <ul>, <li>, <strong>, etc., pronto para ser renderizado em uma página web.
+const updatePrompt = `
+Papel: Atue como Professor Titular de Medicina e Especialista em Design Instrucional de Alta Complexidade, com domínio simultâneo de conteúdo médico avançado e arquitetura visual HTML/CSS compatível com ambientes que sanitizam estilos.
 
-**Resumo Original:**
+🎯 OBJETIVO PEDAGÓGICO
+Sua tarefa é integrar de forma inteligente novas informações a um resumo existente sobre o mesmo tópico.
+Analise os dois inputs abaixo. Reestruture, reescreva e funda os textos para criar uma versão final aprimorada, coesa e de nível acadêmico (Graduação Avançada/Residência).
+
+⬇️ INPUTS DO USUÁRIO
+1. **Resumo Original:**
 """
 ${summary.content}
 """
 
-**Novas Informações a serem Integradas:**
+2. **Novas Informações a serem Integradas:**
 """
 ${newInformation}
-"""`;
+"""
+
+🚫 REGRAS RESTRITIVAS ABSOLUTAS (VISUAL & TÉCNICA)
+1. O resultado final DEVE ser um único bloco de conteúdo em formato HTML.
+2. NUNCA use imagens externas (<img src="...">).
+3. NUNCA use tabelas (<table>).
+4. Texto teórico denso é OBRIGATÓRIO (intercalado com elementos visuais).
+5. É PROIBIDO aplicar background-color diretamente em tags <h1>, <h2> ou <h3>.
+6. Todo título com fundo DEVE estar dentro de um <div> contêiner.
+7. Texto branco (#FFFFFF) SÓ é permitido quando o fundo estiver aplicado ao <div> pai.
+
+🧠 FLUXO DE TRABALHO
+🔹 FASE 1 — Integração de Conteúdo
+- Identifique a lógica médica:
+  - Fisiopatologia/Mecanismo → Converta em FLUXOGRAMA (CSS).
+  - Critérios/Classificações → Converta em INFO-CARDS.
+  - Dados Estatísticos → Converta em GRÁFICOS DE BARRA.
+- Planeje blocos de texto explicativo robustos antes e depois de cada elemento visual.
+
+🔹 FASE 2 — Execução Técnica (Templates HTML/CSS Obrigatórios)
+
+🧱 1. TÍTULO PRINCIPAL (H1) - Use EXATAMENTE este wrapper:
+<div style="background-color: #003366; padding: 25px 30px; border-radius: 6px; margin-bottom: 30px; border-left: 10px solid #d9534f;">
+  <h1 style="color: #ffffff; margin: 0; font-size: 28px;">
+    [TÍTULO DO TEMA INTEGRADO]
+  </h1>
+</div>
+
+🧱 2. SUBTÍTULOS PRINCIPAIS (H2) - Use EXATAMENTE este wrapper:
+<div style="background-color: #f4f8fb; padding: 16px 22px; border-radius: 4px; margin: 40px 0 20px; border-left: 6px solid #003366;">
+  <h2 style="color: #003366; margin: 0; font-size: 22px;">
+    [TÓPICO PRINCIPAL]
+  </h2>
+</div>
+
+🧱 3. SUBTÓPICOS (H3) - Estilo editorial sem fundo:
+<h3 style="color: #003366; border-bottom: 2px solid #d9534f; padding-bottom: 8px; margin-top: 40px;">
+  [Subtópico]
+</h3>
+
+📄 4. TEXTO CORRIDO (Obrigatório entre visuais):
+<p style="text-align: justify; font-size: 16px; margin-bottom: 20px; color: #333333;">
+  [Texto acadêmico aqui...]
+</p>
+
+🧩 5. ELEMENTOS VISUAIS (Simulação via CSS)
+- **Info-Cards:** Caixas com borda colorida e ícones.
+- **Fluxogramas:** Divs com fundo cinza/azul claro conectadas por setas (⬇️).
+- **Gráficos:** Divs com largura percentual (width: X%) para simular barras.
+
+🧪 VALIDAÇÃO FINAL
+Antes de responder, verifique:
+✅ As novas informações foram fundidas organicamente ao texto?
+✅ Nenhum H1/H2 tem background-color direto?
+✅ Todo estilo está inline?
+
+Gere agora APENAS o código HTML resultante da integração.
+`;
             const parsedJson = await generateAIContentWithRetry(updatePrompt, enhancedContentSchema);
 
             setLoadingMessage('Resumo atualizado com sucesso!');
@@ -1406,7 +1466,6 @@ const Dashboard = ({ user, onLogout, subjects, onSelectSubject, onAddSubject, on
         <div className="header-actions">
             {isAdminOrAmbassador && <button className="btn btn-secondary" onClick={onNavigateToSchedules}>Agendamentos</button>}
             {user.role === 'admin' && <button className="btn btn-primary" onClick={onNavigateToAdmin}>Painel Admin</button>}
-            <ThemeToggle theme={theme} toggleTheme={toggleTheme}/>
             <button className="btn btn-secondary" onClick={onLogout}>Sair</button>
         </div>
       </div>
@@ -3155,7 +3214,7 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [terms, setTerms] = useState([]);
   const [allSubjects, setAllSubjects] = useState([]);
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [theme] = useState('light');
   const [view, setView] = useState('dashboard');
   const [currentSubjectId, setCurrentSubjectId] = useState(null);
   const [currentSummaryId, setCurrentSummaryId] = useState(null);
@@ -3855,7 +3914,6 @@ ${summary.content.replace(/<[^>]*>?/gm, ' ')}
       {showHeader && (
           <div className="main-header">
               <Breadcrumbs paths={breadcrumbPaths} />
-              <ThemeToggle theme={theme} toggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} />
           </div>
       )}
       {renderContent()}
