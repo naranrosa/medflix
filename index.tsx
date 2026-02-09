@@ -170,12 +170,18 @@ const flashcardsSchema = {
   properties: {
     flashcards: {
       type: Type.ARRAY,
-      description: 'gerar flashcards claros e objetivos a partir dele, organizados em formato de pergunta e resposta, sem incluir valores de exames laboratoriais ou dados numéricos específicos, priorizando conceitos, definições, mecanismos, causas, consequências, classificações e relações clínicas relevantes, de forma que cada flashcard seja curto, direto e facilite a memorização rápida, tendo uma lista de flashcards com frente e verso, deve ser a quantidade necessária para o aluno aprender todo o conteudo presente no resumo .',
+      description: 'Uma lista completa de flashcards de alto rendimento (High-Yield) focados em provas de residência médica. O foco deve ser: Fisiopatologia, Quadro Clínico Típico, Padrão-Ouro (Gold Standard), Tratamento de Primeira Linha e Diagnóstico Diferencial. As respostas devem ser curtas e diretas para memorização ativa.',
       items: {
         type: Type.OBJECT,
         properties: {
-          front: { type: Type.STRING, description: 'O texto da frente do flashcard (pergunta/conceito).' },
-          back: { type: Type.STRING, description: 'O texto do verso do flashcard (resposta/explicação).' }
+          front: {
+              type: Type.STRING,
+              description: 'A pergunta ou conceito chave. Ex: "Qual o tratamento de primeira linha para X?", "Tríade clássica de Y?", "Mecanismo de ação de Z?".'
+          },
+          back: {
+              type: Type.STRING,
+              description: 'A resposta direta e objetiva. Não use valores numéricos de laboratório a menos que sejam critérios diagnósticos absolutos. Foque em mecanismos, causas e condutas.'
+          }
         },
         required: ['front', 'back']
       }
@@ -3603,7 +3609,21 @@ ${summary.content.replace(/<[^>]*>?/gm, ' ')}
     const summary = summaries.find(s => s.id === currentSummaryId);
     if (!summary) return;
     try {
-        const prompt = `Baseado no resumo sobre "${summary.title}"... Resumo: """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""`;
+        const prompt = `
+        ATUE COMO: Um Preceptor de Residência Médica especialista em preparar alunos para provas como ENARE, USP e SUS-SP.
+
+        OBJETIVO: Criar flashcards de revisão espaçada baseados no texto abaixo.
+
+        REGRAS DE CRIAÇÃO:
+        1. NÍVEL: Avançado/Residência.
+        2. FOCO: Palavras-chave, "buzzwords" de provas, condutas e fisiopatologia.
+        3. RESTRIÇÃO: Não inclua valores de referência laboratoriais numéricos (ex: "Sódio 135-145"), foque no conceito (ex: "Hiponatremia").
+        4. QUANTIDADE: Gere cards suficientes para cobrir todo o conteúdo útil do resumo.
+        5. FORMATO: Perguntas diretas e respostas "na lata" (curtas).
+
+        RESUMO BASE:
+        """${summary.content.replace(/<[^>]*>?/gm, ' ')}"""
+        `;
         const parsedJson = await generateAIContentWithRetry(prompt, flashcardsSchema);
         const { data, error } = await supabase.from('summaries').update({ flashcards: parsedJson.flashcards }).eq('id', currentSummaryId).select().single();
         if (error) throw error;
